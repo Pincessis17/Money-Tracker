@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>My Money</title>
-<meta name="theme-color" content="#2f4bd8">
+<meta name="theme-color" content="#F8F0EB">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -14,116 +14,161 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Plus+Jakarta+Sans:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem("mm-theme");if(t==="sky"||t==="blush")document.documentElement.dataset.theme=t;}catch(e){}</script>
 </head>
 <body class="signedout">
 
 <main id="authView" class="auth">
-  <div><h1>My Money</h1><div class="sub">Track money in, spending and receipts.</div></div>
-  <form class="card" id="authForm" novalidate>
-    <h2 id="authTitle">Sign in</h2>
+  <div class="authart"><img id="authAvatar" src="icons/avatars/girl-brown.png" alt="" width="200" height="220"></div>
+  <form class="card authcard" id="authForm" novalidate>
+    <div class="authhead">
+      <h1 id="authTitle" class="display">Welcome back</h1>
+      <p class="sub" id="authSub">Log in to see your money</p>
+    </div>
     <div class="field"><label for="aEmail">Email</label><input id="aEmail" type="email" autocomplete="email" inputmode="email" required></div>
     <div class="field"><label for="aPass">Password</label><input id="aPass" type="password" autocomplete="current-password" minlength="6" required></div>
     <div class="err" id="aErr" role="alert"></div>
     <div class="ok" id="aOk" role="status"></div>
-    <button class="btn primary" type="submit" id="aSubmit">Sign in</button>
+    <button class="btn primary" type="submit" id="aSubmit">Log in</button>
     <button class="switch" type="button" id="aSwitch">New here? Create an account</button>
   </form>
 </main>
 
-<div class="wrap">
-  <header class="top">
-    <div>
-      <h1>My Money</h1>
-      <div class="sub" id="syncNote">Loading your records…</div>
-    </div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <div class="monthnav" role="group" aria-label="Choose month">
-        <button id="prevM" aria-label="Previous month">‹</button>
-        <span id="monthLabel">—</span>
-        <button id="nextM" aria-label="Next month">›</button>
-      </div>
-      <button class="iconbtn" id="openSettings">Settings</button>
-    </div>
-  </header>
-
+<div class="app">
   <div class="banner" id="banner"></div>
 
-  <section class="kpis" aria-label="Month summary">
-    <div class="kpi in"><div class="label">Money in</div><div class="value num" id="kIn">—</div><div class="hint" id="kInHint"></div></div>
-    <div class="kpi out"><div class="label">Spent</div><div class="value num" id="kOut">—</div><div class="hint" id="kOutHint"></div></div>
-    <div class="kpi net"><div class="label">Left over</div><div class="value num" id="kNet">—</div><div class="hint" id="kNetHint"></div></div>
+  <section class="view" id="view-home" aria-label="Home">
+    <header class="hello">
+      <button type="button" class="avatarbtn" id="openSettings" aria-label="Profile and settings"><img id="meAvatar" src="icons/avatars/girl-brown.png" alt=""></button>
+      <div class="hellotext"><span class="sub" id="greet">Hello</span><b class="display" id="meName">there</b></div>
+      <button type="button" class="roundbtn" id="openSettings2" aria-label="Settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
+    </header>
+    <div class="sync sub" id="syncNote">Loading your records…</div>
+
+    <section class="card hero">
+      <div class="rowb"><span class="sub" id="freeLbl">Free to spend</span><span id="keptPill"></span></div>
+      <div class="bignum display num" id="freeAmt">—</div>
+      <div class="sub" id="freeSub"></div>
+      <div class="tiles3">
+        <div class="tile"><span>Money in</span><b class="num good" id="kIn">—</b></div>
+        <div class="tile"><span>Spent</span><b class="num bad" id="kOut">—</b></div>
+        <div class="tile"><span>Planned</span><b class="num" id="kPlan">—</b></div>
+      </div>
+      <div class="sub" id="kOutHint"></div>
+    </section>
+
+    <div id="dueAlert"></div>
+
+    <section class="card">
+      <div class="card-head"><h2>Last 7 days</h2><span class="sub" id="weekSub"></span></div>
+      <div id="weekChart"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Budgets</h2><button type="button" class="link" data-go="plans">See all</button></div>
+      <div id="homeBudgets"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Recent</h2><button type="button" class="link" data-go="journal">Open journal</button></div>
+      <div id="recent"></div>
+    </section>
   </section>
 
-  <div class="grid">
-    <div class="col">
-      <section class="card" id="plansCard">
-        <div class="card-head"><h2>Plans for my money</h2><button type="button" class="iconbtn" id="addPlan">+ Add plan</button></div>
-        <div id="planSum"></div>
-        <div id="planList"></div>
-      </section>
-      <section class="card" id="budgetCard">
-        <div class="card-head"><h2>Monthly budgets</h2><button type="button" class="iconbtn" id="addBudget">+ Set budget</button></div>
-        <div id="budgetList"></div>
-      </section>
-      <section class="card">
-        <div class="card-head"><h2>Where the money went</h2><span class="sub" id="catSub"></span></div>
-        <div id="cats"></div>
-      </section>
-      <section class="card chart">
-        <div class="card-head">
-          <h2>Last 6 months</h2>
-          <div class="legend"><span><i class="dot" style="background:var(--income)"></i>In</span><span><i class="dot" style="background:var(--expense)"></i>Spent</span></div>
-        </div>
-        <div id="trend"></div>
-      </section>
-      <section class="card" id="fxCard">
-        <div class="card-head"><h2>Currencies</h2><span class="sub" id="fxSub"></span></div>
-        <div id="fxList"></div>
-        <div class="hold">
-          <div class="card-head" style="margin:14px 0 4px"><h2 style="font-size:15px">My foreign money</h2><button type="button" class="iconbtn" id="addHold">+ Add exchange</button></div>
-          <div id="holdList"></div>
-        </div>
-        <div id="fxConv" class="fxconv hidden">
-          <div class="ask" style="font-size:15px">Convert</div>
-          <div class="fxrow">
-            <input id="cvAmt" class="search num" inputmode="decimal" placeholder="Amount" aria-label="Amount to convert">
-            <select id="cvFrom" class="search" aria-label="From currency"></select>
-            <span aria-hidden="true">→</span>
-            <select id="cvTo" class="search" aria-label="To currency"></select>
-          </div>
-          <div id="cvOut" class="cvout"></div>
-        </div>
-        <div class="sub fxsrc">MCB rates via <a href="https://allratestoday.com/" target="_blank" rel="noopener">AllRatesToday</a> · Cedi market rate via <a href="https://fxfeed.io/" target="_blank" rel="noopener">fxfeed</a>. Indicative only.</div>
-      </section>
+  <section class="view hidden" id="view-journal" aria-label="Journal">
+    <header class="pagehead"><h1 class="display">Journal</h1></header>
+    <div class="monthnav" role="group" aria-label="Choose month">
+      <button type="button" id="prevM" aria-label="Previous month"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+      <b class="display" id="monthLabel">—</b>
+      <button type="button" id="nextM" aria-label="Next month"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
     </div>
-    <section class="card">
-      <div class="card-head"><h2>Transactions</h2><span class="sub" id="txCount"></span></div>
-      <div class="filters">
-        <div class="seg" role="group" aria-label="Filter">
-          <button data-f="all" aria-pressed="true">All</button>
-          <button data-f="expense" aria-pressed="false">Spent</button>
-          <button data-f="income" aria-pressed="false">In</button>
-        </div>
-        <input class="search" id="search" type="search" placeholder="Search" aria-label="Search transactions">
-      </div>
-      <div id="txList"></div>
+    <section class="card jsum">
+      <div><span class="sub">Left over this month</span><b class="display num" id="jNet">—</b></div>
+      <div class="jsumr"><span class="good num" id="jIn"></span><span class="bad num" id="jOut"></span></div>
     </section>
-  </div>
+    <div class="filters">
+      <div class="seg" role="group" aria-label="Filter">
+        <button type="button" data-f="all" aria-pressed="true">All</button>
+        <button type="button" data-f="expense" aria-pressed="false">Spent</button>
+        <button type="button" data-f="income" aria-pressed="false">Money in</button>
+      </div>
+      <input class="search" id="search" type="search" placeholder="Search" aria-label="Search transactions">
+    </div>
+    <div class="sub txcount" id="txCount"></div>
+    <div id="txList"></div>
+    <section class="card">
+      <div class="card-head"><h2>Where the money went</h2><span class="sub" id="catSub"></span></div>
+      <div id="cats"></div>
+    </section>
+    <section class="card chart">
+      <div class="card-head">
+        <h2>Last 6 months</h2>
+        <div class="legend"><span><i class="dot" style="background:var(--income)"></i>In</span><span><i class="dot" style="background:var(--expense)"></i>Spent</span></div>
+      </div>
+      <div id="trend"></div>
+    </section>
+  </section>
+
+  <section class="view hidden" id="view-plans" aria-label="Plans and budgets">
+    <header class="pagehead"><h1 class="display">Plans &amp; budgets</h1></header>
+    <section class="card" id="plansCard">
+      <div class="card-head"><h2>Set aside</h2><button type="button" class="pillbtn" id="addPlan">+ New plan</button></div>
+      <div id="planSum"></div>
+      <div id="planList"></div>
+    </section>
+    <section class="card" id="budgetCard">
+      <div class="card-head"><h2>Monthly budgets</h2><button type="button" class="pillbtn" id="addBudget">+ Set budget</button></div>
+      <div id="budgetList"></div>
+    </section>
+  </section>
+
+  <section class="view hidden" id="view-rates" aria-label="Currencies">
+    <header class="pagehead"><h1 class="display">Currencies</h1><span class="sub" id="fxSub"></span></header>
+    <section class="card hold" id="fxCard">
+      <div class="card-head"><h2>My foreign money</h2><button type="button" class="pillbtn" id="addHold">+ Add exchange</button></div>
+      <div id="holdList"></div>
+    </section>
+    <section class="card">
+      <div class="card-head"><h2>Today's rates</h2></div>
+      <div id="fxList"></div>
+    </section>
+    <section class="card fxconv hidden" id="fxConv">
+      <div class="card-head"><h2>Convert</h2></div>
+      <div class="fxrow">
+        <input id="cvAmt" class="search num" inputmode="decimal" placeholder="Amount" aria-label="Amount to convert">
+        <select id="cvFrom" class="search" aria-label="From currency"></select>
+        <span aria-hidden="true">→</span>
+        <select id="cvTo" class="search" aria-label="To currency"></select>
+      </div>
+      <div id="cvOut" class="cvout"></div>
+    </section>
+    <div class="sub fxsrc">MCB rates via <a href="https://allratestoday.com/" target="_blank" rel="noopener">AllRatesToday</a> · Cedi market rate via <a href="https://fxfeed.io/" target="_blank" rel="noopener">fxfeed</a>. Indicative only.</div>
+  </section>
 </div>
 
-<nav class="actionbar" aria-label="Add">
-  <div class="inner">
-    <button class="btn in" id="addIn">+ Money in</button>
-    <button class="btn out" id="addOut">− Expense</button>
-    <button class="btn primary" id="scanBtn">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
-      Snap receipt
-    </button>
-  </div>
+<nav class="tabbar" aria-label="Main">
+  <button type="button" data-tab="home" aria-current="page"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Home</button>
+  <button type="button" data-tab="journal"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M9 9h6M9 13h6"/></svg>Journal</button>
+  <button type="button" class="fab" id="addBtn" aria-label="Add money in, an expense or a receipt"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+  <button type="button" data-tab="plans"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>Plans</button>
+  <button type="button" data-tab="rates"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>Rates</button>
 </nav>
 <input type="file" id="fileIn" accept="image/*" capture="environment" class="hidden">
+
+<!-- Add menu -->
+<div class="overlay" id="addOv" role="dialog" aria-modal="true" aria-labelledby="addTitle">
+  <div class="sheet">
+    <h2 id="addTitle">What would you like to add?</h2>
+    <div class="addgrid">
+      <button type="button" class="addopt primaryopt" id="scanBtn"><span class="addic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span><b>Snap a receipt</b><span>Take a photo and pick a category</span></button>
+      <button type="button" class="addopt" id="addOut"><span class="addic bad"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12l7 7 7-7"/></svg></span><b>Expense</b><span>Money you spent</span></button>
+      <button type="button" class="addopt" id="addIn"><span class="addic good"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span><b>Money in</b><span>Pay, allowance, gifts</span></button>
+    </div>
+    <div class="actions"><div class="right"><button type="button" class="btn ghost" id="addCancel">Cancel</button></div></div>
+  </div>
+</div>
 
 <!-- Entry sheet -->
 <div class="overlay" id="entryOv" role="dialog" aria-modal="true" aria-labelledby="entryTitle">
@@ -174,6 +219,13 @@
 <div class="overlay" id="setOv" role="dialog" aria-modal="true" aria-labelledby="setTitle">
   <div class="sheet">
     <h2 id="setTitle">Settings</h2>
+    <div class="field"><label for="sName">Your name</label><input id="sName" maxlength="40" autocomplete="given-name" placeholder="What should the app call you?"></div>
+    <div><div class="sub sublbl">Theme</div><div class="themepick" id="sTheme">
+      <button type="button" data-v="blush" class="themeopt blush"><span class="sw"><i></i><i></i><i></i></span>Blush</button>
+      <button type="button" data-v="sky" class="themeopt sky"><span class="sw"><i></i><i></i><i></i></span>Sky</button>
+    </div></div>
+    <div><div class="sub sublbl">Avatar</div><div class="avpick" id="sAvatar"></div></div>
+    <div><div class="sub sublbl">Skin tone</div><div class="skinpick" id="sSkin"></div></div>
     <div class="field"><label for="sCur">Currency symbol</label><input id="sCur" maxlength="6"></div>
     <div><div class="sub" style="margin-bottom:6px">Expense categories</div><div class="catlist" id="sExp"></div></div>
     <div><div class="sub" style="margin-bottom:6px">Money-in categories</div><div class="catlist" id="sInc"></div></div>

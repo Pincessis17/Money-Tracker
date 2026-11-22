@@ -4,12 +4,13 @@
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   });
 
-  const PALETTE = ["#2f4bd8","#12805a","#c8433a","#d48a12","#7a4fd6","#0e8fa3","#c2417f","#5b7a14","#8a5a3c","#4a6378","#d0602a","#3d9970","#9b59b6"];
+  const PALETTE = ["#C4677A","#3F7E5C","#4C7BF4","#A8702E","#7E5A9E","#2C8A92","#B5487A","#5E7A24","#8A5A3C","#4A6378","#C0602A","#3D9970","#8E5BB0"];
   const DEFAULTS = {
     currency: "Rs",
     expenseCats: ["Groceries","Eating out","Transport","Rent & housing","Bills & phone","School & books","Health","Personal care","Clothes","Fun & going out","Business","Family & gifts","Other"],
     incomeCats: ["Job / salary","Allowance","Freelance","Business","Gift","Other"],
-    budgets: {}
+    budgets: {},
+    name: "", theme: "blush", avatar: "girl", skin: "brown"
   };
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -36,9 +37,10 @@
   let signUpMode = false;
   function setAuthMode(up) {
     signUpMode = up;
-    $("authTitle").textContent = up ? "Create your account" : "Sign in";
-    $("aSubmit").textContent = up ? "Create account" : "Sign in";
-    $("aSwitch").textContent = up ? "Already have an account? Sign in" : "New here? Create an account";
+    $("authTitle").textContent = up ? "Create your account" : "Welcome back";
+    $("authSub").textContent = up ? "Start tracking your money in a minute" : "Log in to see your money";
+    $("aSubmit").textContent = up ? "Create account" : "Log in";
+    $("aSwitch").textContent = up ? "Already have an account? Log in" : "New here? Create an account";
     $("aPass").autocomplete = up ? "new-password" : "current-password";
     $("aErr").textContent = ""; $("aOk").textContent = "";
   }
@@ -56,7 +58,7 @@
         if (error) throw error;
         if (!data.session) {
           setAuthMode(false);
-          $("aOk").textContent = "Account created. Check your email and tap the confirmation link, then come back here and sign in.";
+          $("aOk").textContent = "Account created. Check your email and tap the confirmation link, then come back here and log in.";
         }
       } else {
         const { error } = await sb.auth.signInWithPassword({ email, password });
@@ -100,14 +102,17 @@
     st.plans = pl.data.map(x => ({ ...x, amount: Number(x.amount) }));
     if (set.data) {
       st.hasSettingsRow = true;
-      st.settings = { currency: set.data.currency, expenseCats: set.data.expense_cats, incomeCats: set.data.income_cats, budgets: set.data.budgets || {} };
+      st.settings = { currency: set.data.currency, expenseCats: set.data.expense_cats, incomeCats: set.data.income_cats, budgets: set.data.budgets || {},
+        name: set.data.display_name || "", theme: set.data.theme || "blush", avatar: set.data.avatar || "girl", skin: set.data.skin || "brown" };
     }
+    applyLook();
     loadRates();
     $("syncNote").textContent = "Synced " + new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
     render();
   }
   async function saveSettings() {
-    const row = { currency: st.settings.currency, expense_cats: st.settings.expenseCats, income_cats: st.settings.incomeCats, budgets: st.settings.budgets || {}, updated_at: new Date().toISOString() };
+    const row = { currency: st.settings.currency, expense_cats: st.settings.expenseCats, income_cats: st.settings.incomeCats, budgets: st.settings.budgets || {},
+      display_name: st.settings.name || "", theme: st.settings.theme, avatar: st.settings.avatar, skin: st.settings.skin, updated_at: new Date().toISOString() };
     const { error } = await sb.from("settings").upsert({ user_id: st.user.id, ...row });
     if (error) throw error;
     st.hasSettingsRow = true;
@@ -118,24 +123,75 @@
   function monthTx(m) { return st.txs.filter(t => (t.date || "").startsWith(m)); }
   function sums(list) { let i = 0, o = 0; for (const t of list) { if (t.type === "income") i += t.amount; else o += t.amount; } return { i, o }; }
 
+  /* ---------- look: theme + avatar ---------- */
+  function avatarSrc(kind, skin) { return "icons/avatars/" + (kind === "boy" ? "boy" : "girl") + "-" + (["deep", "brown", "tan", "light"].includes(skin) ? skin : "brown") + ".png"; }
+  function applyLook() {
+    const s = st.settings, theme = s.theme === "sky" ? "sky" : "blush";
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem("mm-theme", theme); localStorage.setItem("mm-avatar", s.avatar + "|" + s.skin); } catch (_) {}
+    const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = theme === "sky" ? "#EAF1FC" : "#F8F0EB";
+    const src = avatarSrc(s.avatar, s.skin);
+    $("meAvatar").src = src; $("authAvatar").src = src;
+    const h = new Date().getHours();
+    $("greet").textContent = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+    $("meName").textContent = s.name || "there";
+  }
+  try { const a = (localStorage.getItem("mm-avatar") || "").split("|"); if (a[0]) $("authAvatar").src = avatarSrc(a[0], a[1]); } catch (_) {}
+
+  /* ---------- tabs ---------- */
+  const TABS = ["home", "journal", "plans", "rates"];
+  function showTab(name, push) {
+    if (!TABS.includes(name)) name = "home";
+    for (const t of TABS) $("view-" + t).classList.toggle("hidden", t !== name);
+    document.querySelectorAll(".tabbar [data-tab]").forEach(b => { if (b.dataset.tab === name) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
+    if (push !== false && location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
+    window.scrollTo(0, 0);
+  }
+  document.querySelector(".tabbar").addEventListener("click", e => { const b = e.target.closest("[data-tab]"); if (b) showTab(b.dataset.tab); });
+  document.addEventListener("click", e => { const g = e.target.closest("[data-go]"); if (g) showTab(g.dataset.go); });
+  window.addEventListener("hashchange", () => showTab(location.hash.slice(1), false));
+  showTab(location.hash.slice(1) || "home", false);
+
+  /* add menu */
+  $("addBtn").addEventListener("click", () => $("addOv").classList.add("open"));
+  $("addCancel").addEventListener("click", () => $("addOv").classList.remove("open"));
+  $("addOv").addEventListener("click", e => { if (e.target === $("addOv") || e.target.closest(".addopt")) $("addOv").classList.remove("open"); });
+
+  function txRow(t) {
+    const inc = t.type === "income", col = catColor(t.category || "Other", t.type);
+    return '<button class="tx" data-id="' + esc(t.id) + '"><span class="ic" style="background:color-mix(in srgb, ' + col + ' 16%, white);color:' + col + '">' + esc((t.category || "?").slice(0, 2)) + '</span>' +
+      '<span style="min-width:0"><div class="t1">' + esc(t.note || t.category || "Entry") + '</div><div class="t2">' + esc(t.category || "Uncategorised") + (t.receipt_path ? " · receipt" : "") + '</div></span>' +
+      '<span class="amt num ' + (inc ? "in" : "out") + '">' + (inc ? "+" : "−") + esc(money(t.amount)) + '</span></button>';
+  }
+
   function render() {
     document.querySelectorAll(".curLbl").forEach(e => e.textContent = st.settings.currency);
     $("monthLabel").textContent = monthName(st.month, true);
+    const isNow = st.month === ym(new Date());
     const cur = monthTx(st.month), prev = monthTx(shiftMonth(st.month, -1));
     const s = sums(cur), p = sums(prev);
-    $("kIn").textContent = money(s.i);
-    $("kOut").textContent = money(s.o);
     const net = s.i - s.o;
-    $("kNet").textContent = (net < 0 ? "−" : "") + money(Math.abs(net));
-    $("kNet").style.color = net < 0 ? "var(--expense)" : "";
-    $("kInHint").textContent = plural(cur.filter(t => t.type === "income").length);
-    const diff = s.o - p.o;
-    $("kOutHint").innerHTML = p.o > 0 ? (diff > 0 ? '<span class="pill bad">▲ ' + esc(money(diff)) + '</span> vs last month' : '<span class="pill good">▼ ' + esc(money(-diff)) + '</span> vs last month') : esc(plural(cur.filter(t => t.type !== "income").length));
     const planned = openPlans().reduce((a, x) => a + x.amount, 0);
-    if (planned > 0) {
-      const free = net - planned;
-      $("kNetHint").innerHTML = esc(money(planned)) + ' planned · ' + (free >= 0 ? '<span class="pill good">' + esc(money(free)) + ' free</span>' : '<span class="pill bad">Short ' + esc(money(-free)) + '</span>');
-    } else $("kNetHint").innerHTML = s.i > 0 ? (net >= 0 ? '<span class="pill good">' + Math.round(net / s.i * 100) + '% kept</span>' : '<span class="pill bad">Over by ' + esc(money(-net)) + '</span>') : (s.o > 0 ? '<span class="pill bad">No money in logged</span>' : "Nothing logged yet");
+    const free = net - planned;
+    // home hero
+    $("freeLbl").textContent = "Free to spend · " + monthName(st.month, true).split(" ")[0];
+    $("freeAmt").innerHTML = (free < 0 ? "−" : "") + esc(money(Math.abs(free))).replace(/(\.\d\d)$/, "<small>$1</small>");
+    $("freeAmt").style.color = free < 0 ? "var(--bad)" : "";
+    $("freeSub").textContent = planned > 0 ? "after " + money(planned) + " set aside for " + openPlans().length + (openPlans().length === 1 ? " plan" : " plans") : (cur.length ? "money in minus what you spent" : "Add money in or an expense to get started");
+    $("keptPill").innerHTML = s.i > 0 ? (free >= 0 ? '<span class="pill accent">' + Math.round(free / s.i * 100) + '% kept</span>' : '<span class="pill bad">Short ' + esc(money(-free)) + '</span>') : "";
+    $("kIn").textContent = "+" + money(s.i).replace(st.settings.currency + " ", "");
+    $("kOut").textContent = "−" + money(s.o).replace(st.settings.currency + " ", "");
+    $("kPlan").textContent = money(planned).replace(st.settings.currency + " ", "");
+    const diff = s.o - p.o;
+    $("kOutHint").innerHTML = p.o > 0 && cur.length ? (diff > 0 ? 'Spending is <span class="bad">' + esc(money(diff)) + ' higher</span> than last month' : 'Spending is <span class="good">' + esc(money(-diff)) + ' lower</span> than last month') : "";
+    // journal summary
+    $("jNet").textContent = (net < 0 ? "− " : "+ ") + money(Math.abs(net));
+    $("jIn").textContent = "+" + money(s.i) + " in";
+    $("jOut").textContent = "−" + money(s.o) + " out";
+    renderDue();
+    renderWeek();
+    renderHomeBudgets();
+    renderRecent();
     renderPlans(net);
     renderBudgets(cur);
     renderFx(net);
@@ -143,6 +199,60 @@
     renderTrend();
     renderList(cur);
   }
+
+  function renderDue() {
+    const t = today();
+    const due = sortPlans(openPlans()).filter(x => x.due_date && x.due_date <= shiftDay(t, 3));
+    if (!due.length) { $("dueAlert").innerHTML = ""; return; }
+    const x = due[0], late = x.due_date < t;
+    $("dueAlert").innerHTML = '<div class="due"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>' +
+      '<div><b>' + esc(x.title) + ' · ' + esc(money(x.amount)) + '</b><span>' + (late ? "Plan was due " : "Plan due ") + esc(new Date(x.due_date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })) + (due.length > 1 ? " · " + (due.length - 1) + " more" : "") + '</span></div>' +
+      '<button type="button" data-paid="' + esc(x.id) + '">Mark paid</button></div>';
+  }
+  function shiftDay(d, n) { const x = new Date(d + "T12:00:00"); x.setDate(x.getDate() + n); return ym(x) + "-" + String(x.getDate()).padStart(2, "0"); }
+  $("dueAlert").addEventListener("click", async e => {
+    const b = e.target.closest("[data-paid]"); if (!b) return;
+    const x = st.plans.find(p => p.id === b.dataset.paid); if (!x) return;
+    try { await setPlanDone(x.id, true); render(); toast("Paid · " + x.title); } catch (_) { toast("Couldn't update. Check your connection."); }
+  });
+
+  function renderWeek() {
+    const t = today(), days = [];
+    for (let k = 6; k >= 0; k--) { const d = shiftDay(t, -k); days.push({ d, v: st.txs.filter(x => x.type !== "income" && x.date === d).reduce((a, x) => a + x.amount, 0) }); }
+    const total = days.reduce((a, x) => a + x.v, 0);
+    $("weekSub").textContent = money(total) + " spent";
+    const W = 330, top = 10, base = 88, rawMax = Math.max(1, ...days.map(x => x.v));
+    const mag = Math.pow(10, Math.floor(Math.log10(rawMax))), max = [1, 2, 2.5, 5, 10].map(x => x * mag).find(x => x >= rawMax);
+    const pts = days.map((x, i) => [i * (W / 6), base - (x.v / max) * (base - top)]);
+    let d = "M" + pts[0][0].toFixed(1) + " " + pts[0][1].toFixed(1);
+    for (let i = 1; i < pts.length; i++) { const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], cx = (x0 + x1) / 2; d += " C" + cx.toFixed(1) + " " + y0.toFixed(1) + " " + cx.toFixed(1) + " " + y1.toFixed(1) + " " + x1.toFixed(1) + " " + y1.toFixed(1); }
+    let pk = 0; days.forEach((x, i) => { if (x.v > days[pk].v) pk = i; });
+    const label = total > 0 ? "Spending over the last 7 days, highest " + new Date(days[pk].d + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long" }) + " at " + money(days[pk].v) : "No spending in the last 7 days";
+    $("weekChart").innerHTML = '<div class="week"><svg viewBox="-6 0 342 98" role="img" aria-label="' + esc(label) + '">' +
+      '<line x1="0" x2="330" y1="' + base + '" y2="' + base + '" stroke="var(--line)"/><line x1="0" x2="330" y1="' + ((base + top) / 2) + '" y2="' + ((base + top) / 2) + '" stroke="var(--line)" stroke-dasharray="3 4"/>' +
+      '<text x="330" y="' + ((base + top) / 2 - 4) + '" text-anchor="end" font-size="10" fill="var(--muted)">' + esc(shortMoney(max / 2)) + '</text>' +
+      '<path d="' + d + ' L330 ' + base + ' L0 ' + base + ' Z" fill="var(--accent)" opacity="0.13"/>' +
+      '<path d="' + d + '" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>' +
+      (total > 0 ? '<circle cx="' + pts[pk][0].toFixed(1) + '" cy="' + pts[pk][1].toFixed(1) + '" r="5" fill="var(--surface)" stroke="var(--accent)" stroke-width="2.4"><title>' + esc(money(days[pk].v)) + '</title></circle>' : "") +
+      '</svg><div class="weekdays">' + days.map((x, i) => '<span' + (i === pk && total > 0 ? ' class="on"' : "") + '>' + new Date(x.d + "T12:00:00").toLocaleDateString("en-GB", { weekday: "short" }) + '</span>').join("") + '</div></div>';
+  }
+
+  function renderHomeBudgets() {
+    const b = st.settings.budgets || {}, m = ym(new Date());
+    const rows = Object.keys(b).filter(c => Number(b[c]) > 0).map(c => ({ c, ...budgetState(c, m) })).sort((a, z) => z.pct - a.pct).slice(0, 3);
+    if (!rows.length) { $("homeBudgets").innerHTML = '<div class="empty">No budgets yet. <button type="button" class="link" data-go="plans">Set one in Plans</button></div>'; return; }
+    $("homeBudgets").innerHTML = rows.map(r => {
+      const col = r.level === "over" ? "var(--bad)" : r.level === "warn" ? "var(--warn)" : "var(--good)";
+      return '<button type="button" class="budget" data-go="plans"><div class="bt"><span class="name"><span class="dot" style="background:' + catColor(r.c, "expense") + '"></span>' + esc(r.c) + '</span><span class="st">' +
+        (r.left >= 0 ? '<b class="num" style="color:' + col + '">' + esc(money(r.left)) + '</b> left' : '<b class="num" style="color:var(--bad)">Over by ' + esc(money(-r.left)) + '</b>') + '</span></div>' +
+        '<div class="bar"><i style="width:' + Math.min(100, Math.max(r.spent > 0 ? 2 : 0, r.pct * 100)) + '%;background:' + col + '"></i></div></button>';
+    }).join("");
+  }
+  function renderRecent() {
+    const list = [...st.txs].sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.created_at || "").localeCompare(a.created_at || "")).slice(0, 4);
+    $("recent").innerHTML = list.length ? list.map(txRow).join("") : '<div class="empty">Nothing yet. Tap + to add money in, an expense or a receipt.</div>';
+  }
+  $("recent").addEventListener("click", e => { const b = e.target.closest(".tx"); if (!b) return; const t = st.txs.find(x => x.id === b.dataset.id); if (t) openEntry({ tx: t }); });
 
   function renderCats(cur, total) {
     const by = {};
@@ -191,7 +301,7 @@
       .sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.created_at || "").localeCompare(a.created_at || ""));
     $("txCount").textContent = plural(list.length);
     if (!list.length) {
-      $("txList").innerHTML = '<div class="empty">' + (cur.length ? "Nothing matches that filter." : "No entries in " + esc(monthName(st.month, true)) + " yet.<br>Use the buttons below to log money in, an expense, or snap a receipt.") + '</div>';
+      $("txList").innerHTML = '<div class="empty">' + (cur.length ? "Nothing matches that filter." : "No entries in " + esc(monthName(st.month, true)) + " yet.<br>Tap + to add money in, an expense or a receipt.") + '</div>';
       return;
     }
     const groups = new Map();
@@ -202,12 +312,7 @@
       const label = date === today() ? "Today" : d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
       const dayNet = items.reduce((a, t) => a + (t.type === "income" ? t.amount : -t.amount), 0);
       html += '<div class="daygroup"><div class="dayhead"><span style="text-transform:uppercase;letter-spacing:.06em">' + esc(label) + '</span><span class="num">' + (dayNet < 0 ? "−" : "+") + esc(money(Math.abs(dayNet))) + '</span></div>';
-      for (const t of items) {
-        const inc = t.type === "income", col = catColor(t.category || "Other", t.type);
-        html += '<button class="tx" data-id="' + esc(t.id) + '"><span class="ic" style="background:' + col + '">' + esc((t.category || "?").slice(0, 2)) + '</span>' +
-          '<span style="min-width:0"><div class="t1">' + esc(t.note || t.category || "Entry") + '</div><div class="t2">' + esc(t.category || "Uncategorised") + (t.receipt_path ? " · receipt" : "") + '</div></span>' +
-          '<span class="amt num ' + (inc ? "in" : "out") + '">' + (inc ? "+" : "−") + esc(money(t.amount)) + '</span></button>';
-      }
+      for (const t of items) html += txRow(t);
       html += '</div>';
     }
     $("txList").innerHTML = html;
@@ -811,11 +916,26 @@
   /* ---------- settings ---------- */
   function renderSettings() {
     $("sCur").value = st.settings.currency;
+    $("sName").value = st.settings.name || "";
+    renderLookPickers();
     const row = (c, key) => '<div class="catedit"><span><span class="dot" style="display:inline-block;margin-right:8px;background:' + catColor(c, key === "incomeCats" ? "income" : "expense") + '"></span>' + esc(c) + '</span><button type="button" data-k="' + key + '" data-c="' + esc(c) + '" aria-label="Remove ' + esc(c) + '">×</button></div>';
     $("sExp").innerHTML = st.settings.expenseCats.map(c => row(c, "expenseCats")).join("");
     $("sInc").innerHTML = st.settings.incomeCats.map(c => row(c, "incomeCats")).join("");
   }
-  $("openSettings").addEventListener("click", () => { renderSettings(); $("setOv").classList.add("open"); });
+  let lookBefore = null;
+  function openSettings() { lookBefore = { theme: st.settings.theme, avatar: st.settings.avatar, skin: st.settings.skin, name: st.settings.name }; renderSettings(); $("setOv").classList.add("open"); }
+  $("openSettings").addEventListener("click", openSettings);
+  $("openSettings2").addEventListener("click", openSettings);
+  function renderLookPickers() {
+    const s = st.settings;
+    document.querySelectorAll("#sTheme .themeopt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === s.theme)));
+    $("sAvatar").innerHTML = ["girl", "boy"].map(k => '<button type="button" data-v="' + k + '" aria-pressed="' + (s.avatar === k) + '" aria-label="' + (k === "girl" ? "Girl avatar" : "Boy avatar") + '"><img src="' + avatarSrc(k, s.skin) + '" alt=""></button>').join("");
+    const tones = { deep: "#6E3F27", brown: "#9A5C37", tan: "#C98F62", light: "#E2AE8A" };
+    $("sSkin").innerHTML = Object.keys(tones).map(k => '<button type="button" data-v="' + k + '" aria-pressed="' + (s.skin === k) + '" aria-label="' + k + ' skin tone" style="background:' + tones[k] + '"></button>').join("");
+  }
+  $("sTheme").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (!b) return; st.settings.theme = b.dataset.v; applyLook(); renderLookPickers(); });
+  $("sAvatar").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (!b) return; st.settings.avatar = b.dataset.v; applyLook(); renderLookPickers(); });
+  $("sSkin").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (!b) return; st.settings.skin = b.dataset.v; applyLook(); renderLookPickers(); });
   $("setOv").addEventListener("click", async e => {
     if (e.target === $("setOv")) return closeSettings();
     const b = e.target.closest(".catedit button"); if (!b) return;
@@ -826,8 +946,13 @@
   });
   async function closeSettings() {
     const cur = $("sCur").value.trim().slice(0, 6) || "Rs";
+    const name = $("sName").value.trim().slice(0, 40);
     $("setOv").classList.remove("open");
-    if (cur !== st.settings.currency) { st.settings.currency = cur; render(); try { await saveSettings(); } catch (e) { toast("Couldn't save the currency"); } }
+    const b = lookBefore || {};
+    const changed = cur !== st.settings.currency || name !== (st.settings.name || "") || b.theme !== st.settings.theme || b.avatar !== st.settings.avatar || b.skin !== st.settings.skin;
+    st.settings.currency = cur; st.settings.name = name;
+    applyLook(); render();
+    if (changed) { try { await saveSettings(); } catch (e) { toast("Couldn't save your settings. Check your connection."); } }
   }
   $("setDone").addEventListener("click", closeSettings);
   $("signOut").addEventListener("click", async () => { $("setOv").classList.remove("open"); await sb.auth.signOut(); });
@@ -845,7 +970,7 @@
     document.querySelectorAll(".seg button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); render();
   });
   $("search").addEventListener("input", e => { st.q = e.target.value; render(); });
-  document.addEventListener("keydown", e => { if (e.key === "Escape") { if ($("holdOv").classList.contains("open")) closeHold(); else if ($("budOv").classList.contains("open")) closeBudget(); else if ($("remOv").classList.contains("open")) $("remOv").classList.remove("open"); else if ($("planOv").classList.contains("open")) closePlan(); else if ($("rcptOv").classList.contains("open")) $("rcptOv").classList.remove("open"); else if ($("setOv").classList.contains("open")) closeSettings(); else if ($("entryOv").classList.contains("open")) closeEntry(); } });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") { if ($("addOv").classList.contains("open")) $("addOv").classList.remove("open"); else if ($("holdOv").classList.contains("open")) closeHold(); else if ($("budOv").classList.contains("open")) closeBudget(); else if ($("remOv").classList.contains("open")) $("remOv").classList.remove("open"); else if ($("planOv").classList.contains("open")) closePlan(); else if ($("rcptOv").classList.contains("open")) $("rcptOv").classList.remove("open"); else if ($("setOv").classList.contains("open")) closeSettings(); else if ($("entryOv").classList.contains("open")) closeEntry(); } });
 
   render();
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});

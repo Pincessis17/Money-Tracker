@@ -280,3 +280,12 @@ body:not(.signedout) #authView { display: none; }
 .authhead h1 { font-size: 28px; }
 .authhead p { margin: 0; }
 .auth .switch { background: none; border: 0; color: var(--accent-ink); font-weight: 600; padding: 4px 0; }
+
+/* period plans */
+.check { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500; min-height: 44px; }
+.check input { width: 20px; height: 20px; accent-color: var(--accent); }
+.plan .tick.period { border: 0; background: var(--accent-soft); color: var(--accent-ink); border-radius: 10px; cursor: default; }
+.plan .pextra { grid-column: 2 / -1; display: grid; gap: 5px; margin-top: -4px; }
+.plan .pextra .sub { font-size: 12px; }
+.rep { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink); margin-left: 4px; }
+#pKind button.on { background: var(--surface); color: var(--accent-ink); box-shadow: 0 2px 8px rgba(0,0,0,.06); }

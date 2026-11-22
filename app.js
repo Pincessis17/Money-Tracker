@@ -171,7 +171,7 @@
     const cur = monthTx(st.month), prev = monthTx(shiftMonth(st.month, -1));
     const s = sums(cur), p = sums(prev);
     const net = s.i - s.o;
-    const planned = openPlans().reduce((a, x) => a + x.amount, 0);
+    const planned = plannedTotal();
     const free = net - planned;
     // home hero
     $("freeLbl").textContent = "Free to spend · " + monthName(st.month, true).split(" ")[0];
@@ -202,7 +202,7 @@
 
   function renderDue() {
     const t = today();
-    const due = sortPlans(openPlans()).filter(x => x.due_date && x.due_date <= shiftDay(t, 3));
+    const due = sortPlans(openPlans()).filter(x => !isPeriod(x) && x.due_date && x.due_date <= shiftDay(t, 3));
     if (!due.length) { $("dueAlert").innerHTML = ""; return; }
     const x = due[0], late = x.due_date < t;
     $("dueAlert").innerHTML = '<div class="due"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>' +
@@ -238,10 +238,18 @@
   }
 
   function renderHomeBudgets() {
+    const per = sortPlans(openPlans().filter(x => isPeriod(x) && planWindow(x).status === "active"));
+    const perHtml = per.map(x => {
+      const w = planWindow(x), spent = planSpent(x, w), left = x.amount - spent, pct = Math.min(100, spent / x.amount * 100);
+      const col = left < 0 ? "var(--bad)" : pct >= 80 ? "var(--warn)" : "var(--good)";
+      return '<button type="button" class="budget" data-go="plans"><div class="bt"><span class="name"><span class="dot" style="background:' + catColor(x.category, "expense") + '"></span>' + esc(x.title) + '</span><span class="st">' +
+        (left >= 0 ? '<b class="num" style="color:' + col + '">' + esc(money(left)) + '</b> left' : '<b class="num" style="color:var(--bad)">Over by ' + esc(money(-left)) + '</b>') + '</span></div>' +
+        '<div class="bar"><i style="width:' + Math.max(spent > 0 ? 2 : 0, pct) + '%;background:' + col + '"></i></div><span class="bs">Until ' + esc(new Date(w.e + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long" })) + '</span></button>';
+    }).join("");
     const b = st.settings.budgets || {}, m = ym(new Date());
     const rows = Object.keys(b).filter(c => Number(b[c]) > 0).map(c => ({ c, ...budgetState(c, m) })).sort((a, z) => z.pct - a.pct).slice(0, 3);
-    if (!rows.length) { $("homeBudgets").innerHTML = '<div class="empty">No budgets yet. <button type="button" class="link" data-go="plans">Set one in Plans</button></div>'; return; }
-    $("homeBudgets").innerHTML = rows.map(r => {
+    if (!rows.length && !perHtml) { $("homeBudgets").innerHTML = '<div class="empty">No budgets yet. <button type="button" class="link" data-go="plans">Set one in Plans</button></div>'; return; }
+    $("homeBudgets").innerHTML = perHtml + rows.map(r => {
       const col = r.level === "over" ? "var(--bad)" : r.level === "warn" ? "var(--warn)" : "var(--good)";
       return '<button type="button" class="budget" data-go="plans"><div class="bt"><span class="name"><span class="dot" style="background:' + catColor(r.c, "expense") + '"></span>' + esc(r.c) + '</span><span class="st">' +
         (r.left >= 0 ? '<b class="num" style="color:' + col + '">' + esc(money(r.left)) + '</b> left' : '<b class="num" style="color:var(--bad)">Over by ' + esc(money(-r.left)) + '</b>') + '</span></div>' +
@@ -601,8 +609,37 @@
   $("fDate").addEventListener("change", updateBudgetHint);
 
   /* ---------- plans ---------- */
-  function openPlans() { return st.plans.filter(x => !x.done); }
-  function sortPlans(list) { return list.sort((a, b) => (a.due_date || "9999").localeCompare(b.due_date || "9999") || (a.created_at || "").localeCompare(b.created_at || "")); }
+  function dayDiff(a, b) { return Math.round((new Date(b + "T12:00:00") - new Date(a + "T12:00:00")) / 864e5); }
+  function isPeriod(x) { return !!(x.start_date && x.end_date); }
+  function planWindow(x, ref) {
+    ref = ref || today();
+    let s = x.start_date, e = x.end_date;
+    if (x.repeat === "weekly") {
+      const len = dayDiff(s, e), d = dayDiff(s, ref);
+      if (d > 0) {
+        let ss = shiftDay(s, 7 * Math.floor(d / 7));
+        if (dayDiff(ss, ref) > len) ss = shiftDay(ss, 7);
+        s = ss; e = shiftDay(ss, len);
+      }
+    }
+    return { s, e, status: ref < s ? "upcoming" : ref > e ? "ended" : "active" };
+  }
+  function planSpent(x, w) { return st.txs.filter(t => t.type !== "income" && t.category === x.category && t.date >= w.s && t.date <= w.e).reduce((a, t) => a + t.amount, 0); }
+  function planLeft(x) {
+    if (!isPeriod(x)) return x.done ? 0 : x.amount;
+    const w = planWindow(x);
+    return w.status === "ended" ? 0 : Math.max(0, x.amount - planSpent(x, w));
+  }
+  function plannedTotal() { return openPlans().reduce((a, x) => a + planLeft(x), 0); }
+  function rangeLabel(a, b) {
+    const da = new Date(a + "T12:00:00"), db = new Date(b + "T12:00:00");
+    const f = d => d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric" });
+    return a === b ? da.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) : f(da) + " – " + f(db) + " " + db.toLocaleDateString("en-GB", { month: "short" });
+  }
+  function openPlans() { return st.plans.filter(x => !x.done && !(isPeriod(x) && planWindow(x).status === "ended")); }
+  function finishedPlans() { return st.plans.filter(x => x.done || (isPeriod(x) && planWindow(x).status === "ended")); }
+  function planKey(x) { return isPeriod(x) ? planWindow(x).s : (x.due_date || "9999"); }
+  function sortPlans(list) { return list.sort((a, b) => planKey(a).localeCompare(planKey(b)) || (a.created_at || "").localeCompare(b.created_at || "")); }
   function dueText(x) {
     if (!x.due_date) return "";
     const d = new Date(x.due_date + "T12:00:00"), t = today();
@@ -611,26 +648,45 @@
     return x.due_date === t ? " · due today" : " · by " + esc(label);
   }
   function planRow(x, withTick) {
+    if (isPeriod(x)) return periodRow(x);
     return '<div class="plan' + (x.done ? " done" : "") + '">' +
       (withTick ? '<button type="button" class="tick" data-tick="' + esc(x.id) + '" aria-label="' + (x.done ? "Mark not paid: " : "Mark paid: ") + esc(x.title) + '">✓</button>' : '<span class="dot" style="background:' + catColor(x.category, "expense") + ';justify-self:center"></span>') +
       '<button type="button" class="body" data-plan="' + esc(x.id) + '"><div class="t1">' + esc(x.title) + '</div><div class="t2">' + esc(x.category) + (x.done ? " · paid" : dueText(x)) + '</div></button>' +
       '<span class="amt num">' + esc(money(x.amount)) + '</span></div>';
   }
+  function periodRow(x) {
+    const w = planWindow(x), spent = planSpent(x, w), left = x.amount - spent, ended = w.status === "ended";
+    const pct = Math.min(100, x.amount > 0 ? spent / x.amount * 100 : 0);
+    const col = left < 0 ? "var(--bad)" : pct >= 80 ? "var(--warn)" : "var(--good)";
+    let line;
+    if (w.status === "upcoming") line = "Starts " + new Date(w.s + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" });
+    else if (ended) line = left >= 0 ? "Finished · spent " + money(spent) + ", stayed within the plan" : "Finished · went over by " + money(-left);
+    else {
+      const daysLeft = dayDiff(today(), w.e) + 1;
+      line = money(spent) + " of " + money(x.amount) + " used" + (left > 0 && daysLeft > 0 ? " · about " + money(left / daysLeft) + "/day for " + daysLeft + (daysLeft === 1 ? " day" : " days") : "");
+    }
+    const status = w.status === "upcoming" || ended ? '<span class="num">' + esc(money(x.amount)) + '</span>' : left >= 0 ? '<span class="num" style="color:' + (ended ? "var(--muted)" : col) + '">' + esc(money(left)) + ' left</span>' : '<span class="num" style="color:var(--bad)">Over ' + esc(money(-left)) + '</span>';
+    return '<div class="plan' + (ended ? " done" : "") + '">' +
+      '<span class="tick period" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>' +
+      '<button type="button" class="body" data-plan="' + esc(x.id) + '"><div class="t1">' + esc(x.title) + '</div><div class="t2">' + esc(x.category) + ' · ' + esc(rangeLabel(w.s, w.e)) + (x.repeat === "weekly" ? '<span class="rep">every week</span>' : "") + '</div></button>' +
+      '<span class="amt">' + status + '</span>' +
+      '<div class="pextra">' + (w.status === "upcoming" ? "" : '<div class="bar"><i style="width:' + Math.max(spent > 0 ? 2 : 0, pct) + '%;background:' + (ended ? "var(--muted)" : col) + '"></i></div>') + '<span class="sub">' + esc(line) + '</span></div></div>';
+  }
   function renderPlans(net) {
-    const open = sortPlans(openPlans()), done = st.plans.filter(x => x.done).sort((a, b) => (b.done_at || "").localeCompare(a.done_at || "")).slice(0, 10);
-    const planned = open.reduce((a, x) => a + x.amount, 0);
+    const open = sortPlans(openPlans()), done = finishedPlans().sort((a, b) => (b.done_at || b.end_date || "").localeCompare(a.done_at || a.end_date || "")).slice(0, 10);
+    const planned = open.reduce((a, x) => a + planLeft(x), 0);
     if (!open.length && !done.length) {
       $("planSum").innerHTML = "";
-      $("planList").innerHTML = '<div class="empty">Nothing planned yet. Add what your next money is for, like rent, bus fare or a gift, so you don\'t spend it on something else.</div>';
+      $("planList").innerHTML = '<div class="empty">Nothing planned yet. Add what your next money is for, like rent or a gift, or set a spending limit for some days, like bus fare from Monday to Friday.</div>';
       return;
     }
     const free = net - planned;
-    $("planSum").innerHTML = open.length ? '<div class="plansum"><span>' + open.length + ' to pay · <b class="num">' + esc(money(planned)) + '</b></span>' +
+    $("planSum").innerHTML = open.length ? '<div class="plansum"><span>' + open.length + (open.length === 1 ? " plan" : " plans") + ' · <b class="num">' + esc(money(planned)) + '</b> set aside</span>' +
       '<span class="free">Left over this month after plans: <b class="num" style="color:' + (free < 0 ? "var(--expense)" : "var(--income)") + '">' + (free < 0 ? "−" : "") + esc(money(Math.abs(free))) + '</b></span></div>' :
-      '<div class="plansum"><span>All plans paid.</span></div>';
+      '<div class="plansum"><span>All plans finished.</span></div>';
     let html = open.map(x => planRow(x, true)).join("");
     if (done.length) {
-      html += '<button type="button" class="donetoggle" id="doneToggle">' + (st.showDone ? "Hide paid plans" : "Show paid plans (" + done.length + ")") + '</button>';
+      html += '<button type="button" class="donetoggle" id="doneToggle">' + (st.showDone ? "Hide finished plans" : "Show finished plans (" + done.length + ")") + '</button>';
       if (st.showDone) html += done.map(x => planRow(x, true)).join("");
     }
     $("planList").innerHTML = html;
@@ -654,7 +710,35 @@
     if (b) { const x = st.plans.find(p => p.id === b.dataset.plan); if (x) openPlan(x); }
   });
 
-  const pe = { id: null, category: null };
+  const pe = { id: null, category: null, kind: "once" };
+  function weekMonday(d) { const x = new Date(d + "T12:00:00"); const wd = (x.getDay() + 6) % 7; return shiftDay(d, -wd); }
+  function quickRanges() {
+    const mon = weekMonday(today()), nextMon = shiftDay(mon, 7);
+    return [
+      ["Mon–Fri this week", mon, shiftDay(mon, 4)],
+      ["Mon–Fri next week", nextMon, shiftDay(nextMon, 4)],
+      ["This whole week", mon, shiftDay(mon, 6)],
+      ["This weekend", shiftDay(mon, 5), shiftDay(mon, 6)]
+    ];
+  }
+  function setPlanKind(k) {
+    pe.kind = k;
+    document.querySelectorAll("#pKind button").forEach(b => b.classList.toggle("on", b.dataset.k === k));
+    $("pOnce").classList.toggle("hidden", k !== "once");
+    $("pPeriod").classList.toggle("hidden", k !== "period");
+    planHint();
+  }
+  function planHint() {
+    const s = $("pStart").value, e = $("pEnd").value, amt = parseFloat(String($("pAmt").value).replace(/[^0-9.]/g, ""));
+    document.querySelectorAll("#pQuick .chip").forEach(c => c.setAttribute("aria-pressed", String(c.dataset.s === s && c.dataset.e === e)));
+    if (!s || !e || e < s) { $("pHint").textContent = ""; return; }
+    const days = dayDiff(s, e) + 1;
+    $("pHint").textContent = days + (days === 1 ? " day" : " days") + (amt > 0 ? " · about " + money(amt / days) + " a day" : "") + ($("pRepeat").checked ? " · starts again every week" : "");
+  }
+  $("pKind").addEventListener("click", e => { const b = e.target.closest("[data-k]"); if (b) setPlanKind(b.dataset.k); });
+  $("pQuick").addEventListener("click", e => { const b = e.target.closest("[data-s]"); if (!b) return; $("pStart").value = b.dataset.s; $("pEnd").value = b.dataset.e; planHint(); });
+  ["pStart", "pEnd", "pAmt"].forEach(id => $(id).addEventListener("input", planHint));
+  $("pRepeat").addEventListener("change", planHint);
   function renderPlanChips() {
     const list = st.settings.expenseCats;
     const all = pe.category && !list.includes(pe.category) ? [...list, pe.category] : list;
@@ -664,9 +748,12 @@
     pe.id = x ? x.id : null; pe.category = x ? x.category : null;
     $("planTitle").textContent = x ? "Edit plan" : "New plan";
     $("pTitle").value = x ? x.title : ""; $("pAmt").value = x ? String(x.amount) : ""; $("pDue").value = x && x.due_date ? x.due_date : "";
+    $("pStart").value = x && x.start_date ? x.start_date : ""; $("pEnd").value = x && x.end_date ? x.end_date : ""; $("pRepeat").checked = !!(x && x.repeat === "weekly");
+    $("pQuick").innerHTML = quickRanges().map(r => '<button type="button" class="chip" data-s="' + r[1] + '" data-e="' + r[2] + '">' + esc(r[0]) + '</button>').join("");
+    setPlanKind(x && isPeriod(x) ? "period" : "once");
     $("pErr").textContent = "";
     $("pDel").classList.toggle("hidden", !x);
-    $("pUndo").classList.toggle("hidden", !(x && x.done));
+    $("pUndo").classList.toggle("hidden", !(x && x.done && !isPeriod(x)));
     renderPlanChips();
     $("planOv").classList.add("open");
     if (!x) setTimeout(() => $("pTitle").focus(), 50);
@@ -678,12 +765,19 @@
   $("pChips").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; pe.category = b.dataset.c; $("pErr").textContent = ""; renderPlanChips(); });
   $("planForm").addEventListener("submit", async e => {
     e.preventDefault();
-    const title = $("pTitle").value.trim().slice(0, 80);
+    let title = $("pTitle").value.trim().slice(0, 80);
     const amt = parseFloat(String($("pAmt").value).replace(/[^0-9.]/g, ""));
-    if (!title) { $("pErr").textContent = "Say what this money is for."; $("pTitle").focus(); return; }
+    const period = pe.kind === "period", ps = $("pStart").value, pend = $("pEnd").value, weekly = period && $("pRepeat").checked;
+    if (!title && !period) { $("pErr").textContent = "Say what this money is for."; $("pTitle").focus(); return; }
     if (!(amt > 0)) { $("pErr").textContent = "Enter an amount above zero."; $("pAmt").focus(); return; }
     if (!pe.category) { $("pErr").textContent = "Choose what it falls under."; return; }
-    const row = { title, amount: Math.round(amt * 100) / 100, category: pe.category, due_date: $("pDue").value || null };
+    if (period && (!ps || !pend)) { $("pErr").textContent = "Pick the first and last day, or tap one of the quick options."; return; }
+    if (period && pend < ps) { $("pErr").textContent = "The last day can't be before the first day."; return; }
+    if (weekly && dayDiff(ps, pend) > 6) { $("pErr").textContent = "A plan that repeats every week can cover up to 7 days."; return; }
+    if (!title) title = (pe.category + " · " + rangeLabel(ps, pend)).slice(0, 80);
+    const row = period
+      ? { title, amount: Math.round(amt * 100) / 100, category: pe.category, due_date: null, start_date: ps, end_date: pend, repeat: weekly ? "weekly" : "none" }
+      : { title, amount: Math.round(amt * 100) / 100, category: pe.category, due_date: $("pDue").value || null, start_date: null, end_date: null, repeat: "none" };
     $("pSave").disabled = true;
     try {
       const res = pe.id ? await sb.from("plans").update(row).eq("id", pe.id).select().single() : await sb.from("plans").insert(row).select().single();
@@ -708,7 +802,7 @@
 
   function showReminder(amount) {
     const open = sortPlans(openPlans()); if (!open.length) return;
-    const planned = open.reduce((a, x) => a + x.amount, 0);
+    const planned = open.reduce((a, x) => a + planLeft(x), 0);
     $("remSub").innerHTML = '<span class="num">' + esc(money(amount)) + '</span> just came in. <span class="num">' + esc(money(planned)) + '</span> of your money is already promised to these:';
     $("remList").innerHTML = open.map(x => planRow(x, false)).join("");
     $("remOv").classList.add("open");
@@ -719,7 +813,7 @@
   /* linking an expense to a plan */
   function renderPlanPick() {
     const linked = ed.id ? st.plans.find(x => x.paid_tx_id === ed.id) : null;
-    const list = sortPlans(openPlans());
+    const list = sortPlans(openPlans()).filter(x => !isPeriod(x));
     if (linked && !list.includes(linked)) list.unshift(linked);
     const show = ed.type === "expense" && list.length > 0;
     $("planPick").classList.toggle("hidden", !show);

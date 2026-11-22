@@ -242,11 +242,24 @@
 <div class="overlay" id="planOv" role="dialog" aria-modal="true" aria-labelledby="planTitle">
   <form class="sheet" id="planForm" novalidate>
     <h2 id="planTitle">New plan</h2>
-    <div class="sub">Write down what upcoming money is for, so it doesn't get spent on something else.</div>
-    <div class="field"><label for="pTitle">What it's for</label><input id="pTitle" placeholder="e.g. Rent for December, Bus card, Mum's gift" autocomplete="off" maxlength="80"></div>
-    <div class="row2">
-      <div class="field"><label for="pAmt">Amount (<span class="curLbl">Rs</span>)</label><input id="pAmt" class="big" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
-      <div class="field"><label for="pDue">Pay by (optional)</label><input id="pDue" type="date"></div>
+    <div class="sub">Set money aside for a payment, or for spending over a few days, so it doesn't go on something else.</div>
+    <div class="field"><label for="pTitle">What it's for</label><input id="pTitle" placeholder="e.g. Rent for December, Bus fare this week" autocomplete="off" maxlength="80"></div>
+    <div class="field"><label for="pAmt">Amount (<span class="curLbl">Rs</span>)</label><input id="pAmt" class="big" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+    <div class="ask">Is it one payment or a time period?</div>
+    <div class="typetoggle" id="pKind">
+      <button type="button" data-k="once">One payment</button>
+      <button type="button" data-k="period">A time period</button>
+    </div>
+    <div id="pOnce" class="field"><label for="pDue">Pay by (optional)</label><input id="pDue" type="date"></div>
+    <div id="pPeriod" class="hidden" style="display:grid;gap:10px">
+      <div class="sub">Everything you spend in this category during these days counts toward the plan automatically.</div>
+      <div class="chips" id="pQuick"></div>
+      <div class="row2">
+        <div class="field"><label for="pStart">From</label><input id="pStart" type="date"></div>
+        <div class="field"><label for="pEnd">To</label><input id="pEnd" type="date"></div>
+      </div>
+      <label class="check"><input type="checkbox" id="pRepeat"> Repeat every week</label>
+      <div class="sub" id="pHint"></div>
     </div>
     <div class="ask">What does it fall under?</div>
     <div class="chips" id="pChips"></div>

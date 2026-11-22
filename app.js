@@ -13,7 +13,7 @@
   };
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-  const st = { user: null, txs: [], plans: [], showDone: false, settings: structuredClone(DEFAULTS), hasSettingsRow: false, month: ym(new Date()), filter: "all", q: "" };
+  const st = { fx: [], fxTried: false, user: null, txs: [], plans: [], showDone: false, settings: structuredClone(DEFAULTS), hasSettingsRow: false, month: ym(new Date()), filter: "all", q: "" };
 
   function ym(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); }
   function today() { const d = new Date(); return ym(d) + "-" + String(d.getDate()).padStart(2, "0"); }
@@ -100,6 +100,7 @@
       st.hasSettingsRow = true;
       st.settings = { currency: set.data.currency, expenseCats: set.data.expense_cats, incomeCats: set.data.income_cats, budgets: set.data.budgets || {} };
     }
+    loadRates();
     $("syncNote").textContent = "Synced " + new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
     render();
   }
@@ -135,6 +136,7 @@
     } else $("kNetHint").innerHTML = s.i > 0 ? (net >= 0 ? '<span class="pill good">' + Math.round(net / s.i * 100) + '% kept</span>' : '<span class="pill bad">Over by ' + esc(money(-net)) + '</span>') : (s.o > 0 ? '<span class="pill bad">No money in logged</span>' : "Nothing logged yet");
     renderPlans(net);
     renderBudgets(cur);
+    renderFx(net);
     renderCats(cur, s.o);
     renderTrend();
     renderList(cur);
@@ -210,6 +212,113 @@
   }
 
 
+
+
+  /* ---------- currencies ---------- */
+  const FX = [
+    { ccy: "USD", name: "US dollar", sym: "$", src: "mcb" },
+    { ccy: "GBP", name: "British pound", sym: "£", src: "mcb" },
+    { ccy: "GHS", name: "Ghana cedi", sym: "GH₵", src: "market" }
+  ];
+  function muToday() { return new Date(Date.now() + 4 * 3600e3).toISOString().slice(0, 10); }
+  async function loadRates() {
+    const since = new Date(Date.now() - 40 * 86400e3).toISOString().slice(0, 10);
+    const { data, error } = await sb.from("fx_rates").select("day,ccy,source,buy,sell,mid").gte("day", since).in("ccy", FX.map(f => f.ccy)).order("day", { ascending: true });
+    if (error) return;
+    st.fx = data.map(r => ({ ...r, buy: r.buy == null ? null : Number(r.buy), sell: r.sell == null ? null : Number(r.sell), mid: Number(r.mid) }));
+    render();
+    const t = muToday();
+    if (!st.fxTried && FX.some(f => !st.fx.some(r => r.ccy === f.ccy && r.source === f.src && r.day === t))) {
+      st.fxTried = true;
+      try { const { data: res } = await sb.functions.invoke("fetch-rates", { body: {} }); st.fxStatus = res || null; } catch (_) {}
+      const again = await sb.from("fx_rates").select("day,ccy,source,buy,sell,mid").gte("day", since).in("ccy", FX.map(f => f.ccy)).order("day", { ascending: true });
+      if (!again.error) st.fx = again.data.map(r => ({ ...r, buy: r.buy == null ? null : Number(r.buy), sell: r.sell == null ? null : Number(r.sell), mid: Number(r.mid) }));
+      render();
+    }
+  }
+  function series(f) { return st.fx.filter(r => r.ccy === f.ccy && r.source === f.src); }
+  function changeSince(ser, days) {
+    if (ser.length < 2) return null;
+    const last = ser[ser.length - 1];
+    const target = new Date(new Date(last.day + "T12:00:00").getTime() - days * 86400e3).toISOString().slice(0, 10);
+    let base = null; for (const r of ser) { if (r.day <= target) base = r; }
+    if (!base) { if (days > 7 && ser[0].day < last.day) base = ser[0]; else return null; }
+    if (base === last) return null;
+    return { pct: (last.mid - base.mid) / base.mid * 100, from: base.day };
+  }
+  function spark(ser) {
+    if (ser.length < 2) return "";
+    const W = 96, H = 28, vals = ser.map(r => r.mid), min = Math.min(...vals), max = Math.max(...vals), rng = max - min || 1;
+    const t0 = new Date(ser[0].day).getTime(), t1 = new Date(ser[ser.length - 1].day).getTime() || t0 + 1;
+    const pts = ser.map(r => [((new Date(r.day).getTime() - t0) / ((t1 - t0) || 1)) * (W - 4) + 2, H - 3 - ((r.mid - min) / rng) * (H - 6)]);
+    const d = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+    const up = vals[vals.length - 1] >= vals[0], col = up ? "var(--expense)" : "var(--income)";
+    const last = pts[pts.length - 1];
+    return '<svg class="spark" viewBox="0 0 ' + W + ' ' + H + '" aria-hidden="true"><path d="' + d + ' L' + last[0].toFixed(1) + ' ' + H + ' L2 ' + H + ' Z" fill="' + col + '" opacity=".12"/><path d="' + d + '" fill="none" stroke="' + col + '" stroke-width="1.6" stroke-linejoin="round"/><circle cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="2.4" fill="' + col + '"/></svg>';
+  }
+  function pctPill(c, label) {
+    if (!c || Math.abs(c.pct) < 0.005) return c ? '<span class="pill">' + label + ' no change</span>' : "";
+    // A foreign currency going up means the rupee got weaker against it.
+    return '<span class="pill ' + (c.pct > 0 ? "bad" : "good") + '">' + (c.pct > 0 ? "▲ " : "▼ ") + Math.abs(c.pct).toFixed(2) + "% " + label + '</span>';
+  }
+  function fmtF(n, f) { return f.sym + (Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function latest(f) { const s = series(f); return s.length ? s[s.length - 1] : null; }
+  function renderFx(net) {
+    const have = FX.map(f => ({ f, ser: series(f), last: latest(f) })).filter(x => x.last);
+    if (!have.length) {
+      const miss = st.fxStatus && st.fxStatus.missing_keys && st.fxStatus.missing_keys.length;
+      $("fxSub").textContent = "";
+      $("fxList").innerHTML = '<div class="empty">' + (miss ? "Exchange rates switch on once the rate API keys are added in Supabase." : st.fxTried ? "Couldn't get today's rates yet. They update every morning." : "Loading exchange rates…") + '</div>';
+      $("fxConv").classList.add("hidden");
+      return;
+    }
+    const newest = have.map(x => x.last.day).sort().pop();
+    $("fxSub").textContent = "Rates of " + new Date(newest + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    const cur = st.settings.currency;
+    let html = have.map(({ f, ser, last }) => {
+      const w = changeSince(ser, 7), m = changeSince(ser, 30);
+      const detail = f.src === "mcb" ? "MCB buys at " + last.buy.toFixed(2) + " · sells at " + last.sell.toFixed(2) : "Market rate (no MCB rate for cedi)";
+      return '<div class="fx"><div class="fxl"><div class="fxc"><b>' + f.ccy + '</b> <span>' + esc(f.name) + '</span></div>' +
+        '<div class="fxv num">1 ' + f.ccy + ' = ' + esc(cur) + ' ' + last.mid.toFixed(f.ccy === "GHS" ? 3 : 2) + '</div>' +
+        '<div class="fxp">' + (pctPill(w, "week") + " " + pctPill(m, "month")).trim() + (!w && !m ? '<span class="sub">Change shows after a few days of rates</span>' : "") + '</div>' +
+        '<div class="sub">' + esc(detail) + '</div></div>' + spark(ser.slice(-31)) + '</div>';
+    }).join("");
+    if (net > 0) {
+      const parts = have.map(({ f, last }) => fmtF(net / (f.src === "mcb" ? last.sell : last.mid), f));
+      html += '<div class="plansum" style="margin-top:10px"><span>This month\'s left over <b class="num">' + esc(money(net)) + '</b> is worth about <b class="num">' + esc(parts.join(" · ")) + '</b></span></div>';
+    }
+    html += '<div class="sub" style="margin-top:6px">▲ red means that currency got more expensive, so your rupees buy less of it. ▼ green means your rupees buy more.</div>';
+    $("fxList").innerHTML = html;
+    // converter
+    const opts = ["MUR", ...have.map(x => x.f.ccy)];
+    const keepFrom = $("cvFrom").value || "MUR", keepTo = $("cvTo").value || have[0].f.ccy;
+    const optHtml = opts.map(c => '<option value="' + c + '">' + c + '</option>').join("");
+    if ($("cvFrom").dataset.opts !== opts.join()) {
+      $("cvFrom").innerHTML = optHtml; $("cvTo").innerHTML = optHtml;
+      $("cvFrom").dataset.opts = opts.join();
+      $("cvFrom").value = opts.includes(keepFrom) ? keepFrom : "MUR";
+      $("cvTo").value = opts.includes(keepTo) && keepTo !== $("cvFrom").value ? keepTo : opts.find(c => c !== $("cvFrom").value);
+    }
+    $("fxConv").classList.remove("hidden");
+    convert();
+  }
+  function convert() {
+    const amt = parseFloat(String($("cvAmt").value).replace(/[^0-9.]/g, ""));
+    const from = $("cvFrom").value, to = $("cvTo").value;
+    if (!(amt > 0) || !from || !to) { $("cvOut").textContent = "Type an amount to see what you'd get."; return; }
+    if (from === to) { $("cvOut").textContent = "Pick two different currencies."; return; }
+    const meta = c => FX.find(f => f.ccy === c);
+    // MUR value of what you hand over: the bank BUYS your foreign currency (buy rate).
+    let mur = amt, used = [];
+    if (from !== "MUR") { const f = meta(from), r = latest(f); const rate = f.src === "mcb" ? r.buy : r.mid; mur = amt * rate; used.push(from + " at " + rate.toFixed(3) + (f.src === "mcb" ? " (MCB buys)" : " (market)")); }
+    let outAmt = mur, outTxt;
+    if (to === "MUR") outTxt = money(mur);
+    else { const f = meta(to), r = latest(f); const rate = f.src === "mcb" ? r.sell : r.mid; outAmt = mur / rate; outTxt = fmtF(outAmt, f); used.push(to + " at " + rate.toFixed(3) + (f.src === "mcb" ? " (MCB sells)" : " (market)")); }
+    $("cvOut").innerHTML = '<b class="num">' + esc(outTxt) + '</b><span class="sub"> · using ' + esc(used.join(", ")) + '</span>';
+  }
+  $("cvAmt").addEventListener("input", convert);
+  $("cvFrom").addEventListener("change", () => { if ($("cvFrom").value === $("cvTo").value) $("cvTo").value = [...$("cvTo").options].map(o => o.value).find(c => c !== $("cvFrom").value); convert(); });
+  $("cvTo").addEventListener("change", convert);
 
   /* ---------- budgets ---------- */
   function spentIn(cat, m) { return monthTx(m).filter(t => t.type !== "income" && t.category === cat).reduce((a, t) => a + t.amount, 0); }

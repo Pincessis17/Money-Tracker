@@ -178,3 +178,18 @@ body { padding-top: env(safe-area-inset-top); }
 .budget .st { font-size: 13px; color: var(--muted); white-space: nowrap; }
 .budget .bs { font-size: 12px; color: var(--muted); }
 #budgetHint { background: var(--bg); padding: 8px 12px; border-radius: 10px; }
+/* currencies */
+.fx { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 2px; border-bottom: 1px solid var(--line); }
+.fxl { display: grid; gap: 3px; min-width: 0; }
+.fxc { font-size: 14px; } .fxc span { color: var(--muted); }
+.fxv { font-size: 18px; }
+.fxp { display: flex; gap: 6px; flex-wrap: wrap; }
+.pill:not(.good):not(.bad) { background: var(--bg); color: var(--muted); }
+.spark { width: 96px; height: 28px; flex: none; }
+.fxconv { display: grid; gap: 8px; margin-top: 14px; }
+.fxrow { display: grid; grid-template-columns: 1fr auto auto auto; gap: 8px; align-items: center; }
+.fxrow input { min-width: 0; }
+.fxrow select { flex: none; min-width: 74px; }
+.cvout { font-size: 15px; }
+.fxsrc { margin-top: 12px; font-size: 12px; }
+.fxsrc a { color: var(--accent); }

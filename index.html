@@ -78,6 +78,21 @@
         </div>
         <div id="trend"></div>
       </section>
+      <section class="card" id="fxCard">
+        <div class="card-head"><h2>Currencies</h2><span class="sub" id="fxSub"></span></div>
+        <div id="fxList"></div>
+        <div id="fxConv" class="fxconv hidden">
+          <div class="ask" style="font-size:15px">Convert</div>
+          <div class="fxrow">
+            <input id="cvAmt" class="search num" inputmode="decimal" placeholder="Amount" aria-label="Amount to convert">
+            <select id="cvFrom" class="search" aria-label="From currency"></select>
+            <span aria-hidden="true">→</span>
+            <select id="cvTo" class="search" aria-label="To currency"></select>
+          </div>
+          <div id="cvOut" class="cvout"></div>
+        </div>
+        <div class="sub fxsrc">MCB rates via <a href="https://allratestoday.com/" target="_blank" rel="noopener">AllRatesToday</a> · Cedi market rate via <a href="https://fxfeed.io/" target="_blank" rel="noopener">fxfeed</a>. Indicative only.</div>
+      </section>
     </div>
     <section class="card">
       <div class="card-head"><h2>Transactions</h2><span class="sub" id="txCount"></span></div>

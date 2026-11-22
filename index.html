@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>My Money</title>
+<meta name="theme-color" content="#2f4bd8">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="My Money">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="signedout">
+
+<main id="authView" class="auth">
+  <div><h1>My Money</h1><div class="sub">Track money in, spending and receipts.</div></div>
+  <form class="card" id="authForm" novalidate>
+    <h2 id="authTitle">Sign in</h2>
+    <div class="field"><label for="aEmail">Email</label><input id="aEmail" type="email" autocomplete="email" inputmode="email" required></div>
+    <div class="field"><label for="aPass">Password</label><input id="aPass" type="password" autocomplete="current-password" minlength="6" required></div>
+    <div class="err" id="aErr" role="alert"></div>
+    <div class="ok" id="aOk" role="status"></div>
+    <button class="btn primary" type="submit" id="aSubmit">Sign in</button>
+    <button class="switch" type="button" id="aSwitch">New here? Create an account</button>
+  </form>
+</main>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>My Money</h1>
+      <div class="sub" id="syncNote">Loading your records…</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div class="monthnav" role="group" aria-label="Choose month">
+        <button id="prevM" aria-label="Previous month">‹</button>
+        <span id="monthLabel">—</span>
+        <button id="nextM" aria-label="Next month">›</button>
+      </div>
+      <button class="iconbtn" id="openSettings">Settings</button>
+    </div>
+  </header>
+
+  <div class="banner" id="banner"></div>
+
+  <section class="kpis" aria-label="Month summary">
+    <div class="kpi in"><div class="label">Money in</div><div class="value num" id="kIn">—</div><div class="hint" id="kInHint"></div></div>
+    <div class="kpi out"><div class="label">Spent</div><div class="value num" id="kOut">—</div><div class="hint" id="kOutHint"></div></div>
+    <div class="kpi net"><div class="label">Left over</div><div class="value num" id="kNet">—</div><div class="hint" id="kNetHint"></div></div>
+  </section>
+
+  <div class="grid">
+    <div class="col">
+      <section class="card">
+        <div class="card-head"><h2>Where the money went</h2><span class="sub" id="catSub"></span></div>
+        <div id="cats"></div>
+      </section>
+      <section class="card chart">
+        <div class="card-head">
+          <h2>Last 6 months</h2>
+          <div class="legend"><span><i class="dot" style="background:var(--income)"></i>In</span><span><i class="dot" style="background:var(--expense)"></i>Spent</span></div>
+        </div>
+        <div id="trend"></div>
+      </section>
+    </div>
+    <section class="card">
+      <div class="card-head"><h2>Transactions</h2><span class="sub" id="txCount"></span></div>
+      <div class="filters">
+        <div class="seg" role="group" aria-label="Filter">
+          <button data-f="all" aria-pressed="true">All</button>
+          <button data-f="expense" aria-pressed="false">Spent</button>
+          <button data-f="income" aria-pressed="false">In</button>
+        </div>
+        <input class="search" id="search" type="search" placeholder="Search" aria-label="Search transactions">
+      </div>
+      <div id="txList"></div>
+    </section>
+  </div>
+</div>
+
+<nav class="actionbar" aria-label="Add">
+  <div class="inner">
+    <button class="btn in" id="addIn">+ Money in</button>
+    <button class="btn out" id="addOut">− Expense</button>
+    <button class="btn primary" id="scanBtn">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      Snap receipt
+    </button>
+  </div>
+</nav>
+<input type="file" id="fileIn" accept="image/*" capture="environment" class="hidden">
+
+<!-- Entry sheet -->
+<div class="overlay" id="entryOv" role="dialog" aria-modal="true" aria-labelledby="entryTitle">
+  <form class="sheet" id="entryForm" novalidate>
+    <h2 id="entryTitle">New entry</h2>
+    <div class="receiptbox hidden" id="rBox">
+      <img id="rImg" alt="Receipt photo">
+      <div class="status" id="rStatus"></div>
+    </div>
+    <div class="typetoggle" id="typeToggle">
+      <button type="button" data-t="expense" class="out">Expense</button>
+      <button type="button" data-t="income" class="in">Money in</button>
+    </div>
+    <div class="row2">
+      <div class="field"><label for="fAmt">Amount (<span class="curLbl">Rs</span>)</label><input id="fAmt" class="big" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+      <div class="field"><label for="fDate">Date</label><input id="fDate" type="date"></div>
+    </div>
+    <div class="field"><label for="fNote" id="fNoteLbl">Where / what</label><input id="fNote" placeholder="e.g. Winners supermarket" autocomplete="off"></div>
+    <div class="ask" id="askLbl">What does this fall under?</div>
+    <div class="chips" id="chips"></div>
+    <div class="row2 hidden" id="newCatRow" style="grid-template-columns:1fr auto">
+      <input id="newCat" class="search" placeholder="New category name" aria-label="New category name">
+      <button type="button" class="btn" id="newCatAdd" style="padding:8px 14px">Add</button>
+    </div>
+    <div class="err" id="fErr"></div>
+    <div class="actions">
+      <button type="button" class="btn danger hidden" id="delBtn">Delete</button>
+      <button type="button" class="btn ghost hidden" id="viewRcpt">View receipt</button>
+      <div class="right">
+        <button type="button" class="btn ghost" id="cancelBtn">Cancel</button>
+        <button type="submit" class="btn primary" id="saveBtn">Save</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- Receipt viewer -->
+<div class="overlay" id="rcptOv" role="dialog" aria-modal="true" aria-label="Receipt">
+  <div class="sheet">
+    <img class="receiptfull" id="rcptFull" alt="Saved receipt">
+    <div class="actions"><div class="right"><button type="button" class="btn" id="rcptClose">Close</button></div></div>
+  </div>
+</div>
+
+<!-- Settings sheet -->
+<div class="overlay" id="setOv" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+  <div class="sheet">
+    <h2 id="setTitle">Settings</h2>
+    <div class="field"><label for="sCur">Currency symbol</label><input id="sCur" maxlength="6"></div>
+    <div><div class="sub" style="margin-bottom:6px">Expense categories</div><div class="catlist" id="sExp"></div></div>
+    <div><div class="sub" style="margin-bottom:6px">Money-in categories</div><div class="catlist" id="sInc"></div></div>
+    <div class="sub">Removing a category keeps past entries; they still show under their old name.</div>
+    <div class="actions">
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn ghost" id="copyCsv">Copy all as CSV</button><button type="button" class="btn danger" id="signOut">Sign out</button></div>
+      <div class="right"><button type="button" class="btn primary" id="setDone">Done</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="supabase.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

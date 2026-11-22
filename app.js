@@ -13,7 +13,7 @@
   };
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-  const st = { fx: [], fxTried: false, user: null, txs: [], plans: [], showDone: false, settings: structuredClone(DEFAULTS), hasSettingsRow: false, month: ym(new Date()), filter: "all", q: "" };
+  const st = { holds: [], fx: [], fxTried: false, user: null, txs: [], plans: [], showDone: false, settings: structuredClone(DEFAULTS), hasSettingsRow: false, month: ym(new Date()), filter: "all", q: "" };
 
   function ym(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); }
   function today() { const d = new Date(); return ym(d) + "-" + String(d.getDate()).padStart(2, "0"); }
@@ -76,25 +76,27 @@
     if ((u && u.id) === (st.user && st.user.id)) return;
     st.user = u;
     document.body.classList.toggle("signedout", !u);
-    if (u) { $("aPass").value = ""; loadAll(); } else { st.txs = []; st.plans = []; st.settings = structuredClone(DEFAULTS); }
+    if (u) { $("aPass").value = ""; loadAll(); } else { st.holds = []; st.txs = []; st.plans = []; st.settings = structuredClone(DEFAULTS); }
   });
 
   /* ---------- data ---------- */
   async function loadAll() {
     $("syncNote").textContent = "Loading your records…";
     render();
-    const [tx, set, pl] = await Promise.all([
+    const [tx, set, pl, hl] = await Promise.all([
       sb.from("transactions").select("*").order("date", { ascending: false }).order("created_at", { ascending: false }),
       sb.from("settings").select("*").maybeSingle(),
-      sb.from("plans").select("*").order("created_at", { ascending: true })
+      sb.from("plans").select("*").order("created_at", { ascending: true }),
+      sb.from("fx_holdings").select("*").order("date", { ascending: false })
     ]);
-    if (tx.error || set.error || pl.error) {
+    if (tx.error || set.error || pl.error || hl.error) {
       $("syncNote").textContent = "Not synced";
       banner("Couldn't load your records. Check your connection and pull down or reopen the app.");
       return;
     }
     banner("");
     st.txs = tx.data.map(t => ({ ...t, amount: Number(t.amount) }));
+    st.holds = hl.data.map(x => ({ ...x, amount: Number(x.amount), cost_mur: Number(x.cost_mur) }));
     st.plans = pl.data.map(x => ({ ...x, amount: Number(x.amount) }));
     if (set.data) {
       st.hasSettingsRow = true;
@@ -270,6 +272,7 @@
       $("fxSub").textContent = "";
       $("fxList").innerHTML = '<div class="empty">' + (miss ? "Exchange rates switch on once the rate API keys are added in Supabase." : st.fxTried ? "Couldn't get today's rates yet. They update every morning." : "Loading exchange rates…") + '</div>';
       $("fxConv").classList.add("hidden");
+      renderHolds();
       return;
     }
     const newest = have.map(x => x.last.day).sort().pop();
@@ -301,6 +304,7 @@
     }
     $("fxConv").classList.remove("hidden");
     convert();
+    renderHolds();
   }
   function convert() {
     const amt = parseFloat(String($("cvAmt").value).replace(/[^0-9.]/g, ""));
@@ -319,6 +323,93 @@
   $("cvAmt").addEventListener("input", convert);
   $("cvFrom").addEventListener("change", () => { if ($("cvFrom").value === $("cvTo").value) $("cvTo").value = [...$("cvTo").options].map(o => o.value).find(c => c !== $("cvFrom").value); convert(); });
   $("cvTo").addEventListener("change", convert);
+
+
+  /* ---------- my foreign money ---------- */
+  function valueNow(hd) {
+    const f = FX.find(x => x.ccy === hd.ccy), r = f && latest(f);
+    if (!r) return null;
+    const rate = f.src === "mcb" ? r.buy : r.mid; // what you'd get changing it back to rupees today
+    return { rate, value: hd.amount * rate, src: f.src, day: r.day };
+  }
+  function gainHtml(g, base) {
+    if (Math.abs(g) < 0.005) return '<span class="pill">no change</span>';
+    return '<span class="pill ' + (g > 0 ? "good" : "bad") + '">' + (g > 0 ? "▲ +" : "▼ −") + esc(money(Math.abs(g))) + " (" + (g > 0 ? "+" : "−") + Math.abs(g / base * 100).toFixed(1) + '%)</span>';
+  }
+  function renderHolds() {
+    if (!st.holds.length) { $("holdList").innerHTML = '<div class="empty" style="padding:8px 0">When you change rupees into dollars, pounds or cedis, add it here to see each day if it has gained or lost value.</div>'; return; }
+    let totCost = 0, totVal = 0, allValued = true;
+    const rows = st.holds.map(hd => {
+      const f = FX.find(x => x.ccy === hd.ccy) || { sym: hd.ccy + " ", ccy: hd.ccy };
+      const v = valueNow(hd), boughtAt = hd.cost_mur / hd.amount;
+      totCost += hd.cost_mur; if (v) totVal += v.value; else allValued = false;
+      const when = new Date(hd.date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+      return '<button type="button" class="holdrow" data-h="' + esc(hd.id) + '">' +
+        '<div class="hr1"><b class="num">' + esc(fmtF(hd.amount, f)) + '</b>' + (v ? '<span>now worth <b class="num">' + esc(money(v.value)) + '</b></span>' : '<span class="sub">no rate yet</span>') + '</div>' +
+        '<div class="hr2">' + (v ? gainHtml(v.value - hd.cost_mur, hd.cost_mur) : "") + '<span class="sub">paid ' + esc(money(hd.cost_mur)) + ' on ' + esc(when) + ' (Rs ' + boughtAt.toFixed(2) + ' each)' + (v ? ' · today Rs ' + v.rate.toFixed(2) + (v.src === "mcb" ? " at MCB" : " market") : "") + (hd.note ? " · " + esc(hd.note) : "") + '</span></div></button>';
+    }).join("");
+    const g = totVal - totCost;
+    const total = st.holds.length > 1 && allValued ? '<div class="plansum"><span>Paid <b class="num">' + esc(money(totCost)) + '</b></span><span>Worth now <b class="num">' + esc(money(totVal)) + '</b></span><span class="free">' + gainHtml(g, totCost) + '</span></div>' : "";
+    $("holdList").innerHTML = total + rows + '<div class="sub" style="margin-top:6px">"Worth now" is what MCB would give you today to change it back to rupees (its buy rate).</div>';
+  }
+  const he = { id: null, ccy: "USD" };
+  function renderHoldChips() {
+    $("hCcy").innerHTML = FX.map(f => '<button type="button" class="chip" data-c="' + f.ccy + '" aria-pressed="' + (f.ccy === he.ccy) + '">' + f.ccy + ' · ' + esc(f.name) + '</button>').join("");
+    $("hAmtLbl").textContent = "I got (" + he.ccy + ")";
+    holdHint();
+  }
+  function holdHint() {
+    const cost = parseFloat(String($("hCost").value).replace(/[^0-9.]/g, "")), amt = parseFloat(String($("hAmt").value).replace(/[^0-9.]/g, ""));
+    const f = FX.find(x => x.ccy === he.ccy), r = latest(f);
+    const parts = [];
+    if (cost > 0 && amt > 0) parts.push("You paid Rs " + (cost / amt).toFixed(f.ccy === "GHS" ? 3 : 2) + " per " + f.ccy + ".");
+    if (r) {
+      const rate = f.src === "mcb" ? r.sell : r.mid;
+      parts.push("Today " + (f.src === "mcb" ? "MCB sells " : "the market rate is ") + f.ccy + " at Rs " + rate.toFixed(f.ccy === "GHS" ? 3 : 2) + (cost > 0 && !(amt > 0) ? ", so about " + fmtF(cost / rate, f) + " for that amount" : "") + ".");
+    }
+    $("hHint").textContent = parts.join(" ");
+  }
+  function openHold(hd) {
+    he.id = hd ? hd.id : null; he.ccy = hd ? hd.ccy : (he.ccy || "USD");
+    $("holdTitle").textContent = hd ? "Edit exchange" : "Record an exchange";
+    $("hCost").value = hd ? String(hd.cost_mur) : ""; $("hAmt").value = hd ? String(hd.amount) : "";
+    $("hDate").value = hd ? hd.date : today(); $("hNote").value = hd ? hd.note : "";
+    $("hErr").textContent = ""; $("hDel").classList.toggle("hidden", !hd);
+    renderHoldChips();
+    $("holdOv").classList.add("open");
+    if (!hd) setTimeout(() => $("hCost").focus(), 50);
+  }
+  function closeHold() { $("holdOv").classList.remove("open"); }
+  $("addHold").addEventListener("click", () => openHold(null));
+  $("holdList").addEventListener("click", e => { const b = e.target.closest("[data-h]"); if (!b) return; const hd = st.holds.find(x => x.id === b.dataset.h); if (hd) openHold(hd); });
+  $("hCcy").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; he.ccy = b.dataset.c; renderHoldChips(); });
+  $("hCost").addEventListener("input", holdHint); $("hAmt").addEventListener("input", holdHint);
+  $("hCancel").addEventListener("click", closeHold);
+  $("holdOv").addEventListener("click", e => { if (e.target === $("holdOv")) closeHold(); });
+  $("holdForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const cost = parseFloat(String($("hCost").value).replace(/[^0-9.]/g, "")), amt = parseFloat(String($("hAmt").value).replace(/[^0-9.]/g, ""));
+    if (!(cost > 0)) { $("hErr").textContent = "Enter how many rupees you paid."; $("hCost").focus(); return; }
+    if (!(amt > 0)) { $("hErr").textContent = "Enter how much " + he.ccy + " you got."; $("hAmt").focus(); return; }
+    if (!$("hDate").value) { $("hErr").textContent = "Pick the date."; return; }
+    const row = { ccy: he.ccy, amount: Math.round(amt * 100) / 100, cost_mur: Math.round(cost * 100) / 100, date: $("hDate").value, note: $("hNote").value.trim().slice(0, 80) };
+    $("hSave").disabled = true;
+    try {
+      const res = he.id ? await sb.from("fx_holdings").update(row).eq("id", he.id).select().single() : await sb.from("fx_holdings").insert(row).select().single();
+      if (res.error) throw res.error;
+      const saved = { ...res.data, amount: Number(res.data.amount), cost_mur: Number(res.data.cost_mur) };
+      st.holds = (he.id ? st.holds.map(x => x.id === he.id ? saved : x) : [saved, ...st.holds]).sort((a, b) => b.date.localeCompare(a.date));
+      closeHold(); render(); toast(he.id ? "Updated" : "Saved · " + fmtF(saved.amount, FX.find(f => f.ccy === saved.ccy)));
+    } catch (err) { $("hErr").textContent = "Couldn't save. Try again."; }
+    finally { $("hSave").disabled = false; }
+  });
+  $("hDel").addEventListener("click", async () => {
+    if ($("hDel").dataset.confirm !== "1") { $("hDel").dataset.confirm = "1"; $("hDel").textContent = "Tap again to delete"; setTimeout(() => { $("hDel").dataset.confirm = ""; $("hDel").textContent = "Delete"; }, 3000); return; }
+    $("hDel").dataset.confirm = ""; $("hDel").textContent = "Delete";
+    const { error } = await sb.from("fx_holdings").delete().eq("id", he.id);
+    if (error) { $("hErr").textContent = "Couldn't delete. Try again."; return; }
+    st.holds = st.holds.filter(x => x.id !== he.id); closeHold(); render(); toast("Deleted");
+  });
 
   /* ---------- budgets ---------- */
   function spentIn(cat, m) { return monthTx(m).filter(t => t.type !== "income" && t.category === cat).reduce((a, t) => a + t.amount, 0); }
@@ -754,7 +845,7 @@
     document.querySelectorAll(".seg button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); render();
   });
   $("search").addEventListener("input", e => { st.q = e.target.value; render(); });
-  document.addEventListener("keydown", e => { if (e.key === "Escape") { if ($("budOv").classList.contains("open")) closeBudget(); else if ($("remOv").classList.contains("open")) $("remOv").classList.remove("open"); else if ($("planOv").classList.contains("open")) closePlan(); else if ($("rcptOv").classList.contains("open")) $("rcptOv").classList.remove("open"); else if ($("setOv").classList.contains("open")) closeSettings(); else if ($("entryOv").classList.contains("open")) closeEntry(); } });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") { if ($("holdOv").classList.contains("open")) closeHold(); else if ($("budOv").classList.contains("open")) closeBudget(); else if ($("remOv").classList.contains("open")) $("remOv").classList.remove("open"); else if ($("planOv").classList.contains("open")) closePlan(); else if ($("rcptOv").classList.contains("open")) $("rcptOv").classList.remove("open"); else if ($("setOv").classList.contains("open")) closeSettings(); else if ($("entryOv").classList.contains("open")) closeEntry(); } });
 
   render();
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});

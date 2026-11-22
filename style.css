@@ -193,3 +193,9 @@ body { padding-top: env(safe-area-inset-top); }
 .cvout { font-size: 15px; }
 .fxsrc { margin-top: 12px; font-size: 12px; }
 .fxsrc a { color: var(--accent); }
+.holdrow { display: grid; gap: 4px; width: 100%; text-align: left; border: 0; background: none; padding: 10px 2px; border-bottom: 1px solid var(--line); border-radius: 0; }
+.holdrow:hover { background: var(--bg); }
+.holdrow .hr1 { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; font-size: 15px; flex-wrap: wrap; }
+.holdrow .hr1 span { font-size: 14px; }
+.holdrow .hr2 { display: flex; gap: 6px 8px; flex-wrap: wrap; align-items: center; }
+.holdrow .hr2 .sub { font-size: 12px; }

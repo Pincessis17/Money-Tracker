@@ -81,6 +81,10 @@
       <section class="card" id="fxCard">
         <div class="card-head"><h2>Currencies</h2><span class="sub" id="fxSub"></span></div>
         <div id="fxList"></div>
+        <div class="hold">
+          <div class="card-head" style="margin:14px 0 4px"><h2 style="font-size:15px">My foreign money</h2><button type="button" class="iconbtn" id="addHold">+ Add exchange</button></div>
+          <div id="holdList"></div>
+        </div>
         <div id="fxConv" class="fxconv hidden">
           <div class="ask" style="font-size:15px">Convert</div>
           <div class="fxrow">
@@ -221,6 +225,33 @@
       <div class="right">
         <button type="button" class="btn ghost" id="bCancel">Cancel</button>
         <button type="submit" class="btn primary" id="bSave">Save budget</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+
+<!-- Holding sheet -->
+<div class="overlay" id="holdOv" role="dialog" aria-modal="true" aria-labelledby="holdTitle">
+  <form class="sheet" id="holdForm" novalidate>
+    <h2 id="holdTitle">Record an exchange</h2>
+    <div class="sub">Enter what you paid in rupees and what you got. The app then shows what it's worth each day at MCB's rate.</div>
+    <div class="field"><label>Currency you got</label><div class="chips" id="hCcy"></div></div>
+    <div class="row2">
+      <div class="field"><label for="hCost">I paid (<span class="curLbl">Rs</span>)</label><input id="hCost" class="big" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+      <div class="field"><label for="hAmt" id="hAmtLbl">I got</label><input id="hAmt" class="big" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+    </div>
+    <div class="sub" id="hHint"></div>
+    <div class="row2">
+      <div class="field"><label for="hDate">Date</label><input id="hDate" type="date"></div>
+      <div class="field"><label for="hNote">Note (optional)</label><input id="hNote" placeholder="e.g. MCB Port Louis, savings" maxlength="80" autocomplete="off"></div>
+    </div>
+    <div class="err" id="hErr"></div>
+    <div class="actions">
+      <button type="button" class="btn danger hidden" id="hDel">Delete</button>
+      <div class="right">
+        <button type="button" class="btn ghost" id="hCancel">Cancel</button>
+        <button type="submit" class="btn primary" id="hSave">Save</button>
       </div>
     </div>
   </form>

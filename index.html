@@ -63,6 +63,10 @@
         <div id="planSum"></div>
         <div id="planList"></div>
       </section>
+      <section class="card" id="budgetCard">
+        <div class="card-head"><h2>Monthly budgets</h2><button type="button" class="iconbtn" id="addBudget">+ Set budget</button></div>
+        <div id="budgetList"></div>
+      </section>
       <section class="card">
         <div class="card-head"><h2>Where the money went</h2><span class="sub" id="catSub"></span></div>
         <div id="cats"></div>
@@ -126,6 +130,7 @@
       <input id="newCat" class="search" placeholder="New category name" aria-label="New category name">
       <button type="button" class="btn" id="newCatAdd" style="padding:8px 14px">Add</button>
     </div>
+    <div class="sub hidden" id="budgetHint"></div>
     <div class="err" id="fErr"></div>
     <div class="actions">
       <button type="button" class="btn danger hidden" id="delBtn">Delete</button>
@@ -181,6 +186,26 @@
       <div class="right">
         <button type="button" class="btn ghost" id="pCancel">Cancel</button>
         <button type="submit" class="btn primary" id="pSave">Save plan</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+
+<!-- Budget sheet -->
+<div class="overlay" id="budOv" role="dialog" aria-modal="true" aria-labelledby="budTitle">
+  <form class="sheet" id="budForm" novalidate>
+    <h2 id="budTitle">Set a monthly budget</h2>
+    <div class="sub">Choose a category and how much you allow for it each month. Spending in that category counts down automatically, and it starts fresh on the 1st.</div>
+    <div class="ask">Which category?</div>
+    <div class="chips" id="bChips"></div>
+    <div class="field"><label for="bAmt">Amount per month (<span class="curLbl">Rs</span>)</label><input id="bAmt" class="big" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+    <div class="err" id="bErr"></div>
+    <div class="actions">
+      <button type="button" class="btn danger hidden" id="bDel">Remove budget</button>
+      <div class="right">
+        <button type="button" class="btn ghost" id="bCancel">Cancel</button>
+        <button type="submit" class="btn primary" id="bSave">Save budget</button>
       </div>
     </div>
   </form>

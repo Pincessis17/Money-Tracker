@@ -169,3 +169,12 @@ body { padding-top: env(safe-area-inset-top); }
 .plan .amt { font-size: 14px; }
 .donetoggle { border: 0; background: none; color: var(--accent); font-size: 13px; font-weight: 600; padding: 8px 4px 0; }
 .kpi .value { font-size: clamp(16px, 4.4vw, 22px); white-space: nowrap; overflow-wrap: normal; overflow: hidden; text-overflow: ellipsis; }
+/* budgets */
+.budget { display: grid; gap: 6px; width: 100%; border: 0; background: none; text-align: left; padding: 10px 4px; border-bottom: 1px solid var(--line); border-radius: 0; }
+.budget:last-child { border-bottom: 0; }
+.budget:hover { background: var(--bg); }
+.budget .bt { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; font-size: 14px; }
+.budget .name { display: flex; align-items: center; gap: 8px; font-weight: 600; min-width: 0; }
+.budget .st { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.budget .bs { font-size: 12px; color: var(--muted); }
+#budgetHint { background: var(--bg); padding: 8px 12px; border-radius: 10px; }

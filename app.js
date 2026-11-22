@@ -8,7 +8,8 @@
   const DEFAULTS = {
     currency: "Rs",
     expenseCats: ["Groceries","Eating out","Transport","Rent & housing","Bills & phone","School & books","Health","Personal care","Clothes","Fun & going out","Business","Family & gifts","Other"],
-    incomeCats: ["Job / salary","Allowance","Freelance","Business","Gift","Other"]
+    incomeCats: ["Job / salary","Allowance","Freelance","Business","Gift","Other"],
+    budgets: {}
   };
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -97,13 +98,13 @@
     st.plans = pl.data.map(x => ({ ...x, amount: Number(x.amount) }));
     if (set.data) {
       st.hasSettingsRow = true;
-      st.settings = { currency: set.data.currency, expenseCats: set.data.expense_cats, incomeCats: set.data.income_cats };
+      st.settings = { currency: set.data.currency, expenseCats: set.data.expense_cats, incomeCats: set.data.income_cats, budgets: set.data.budgets || {} };
     }
     $("syncNote").textContent = "Synced " + new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
     render();
   }
   async function saveSettings() {
-    const row = { currency: st.settings.currency, expense_cats: st.settings.expenseCats, income_cats: st.settings.incomeCats, updated_at: new Date().toISOString() };
+    const row = { currency: st.settings.currency, expense_cats: st.settings.expenseCats, income_cats: st.settings.incomeCats, budgets: st.settings.budgets || {}, updated_at: new Date().toISOString() };
     const { error } = await sb.from("settings").upsert({ user_id: st.user.id, ...row });
     if (error) throw error;
     st.hasSettingsRow = true;
@@ -133,6 +134,7 @@
       $("kNetHint").innerHTML = esc(money(planned)) + ' planned · ' + (free >= 0 ? '<span class="pill good">' + esc(money(free)) + ' free</span>' : '<span class="pill bad">Short ' + esc(money(-free)) + '</span>');
     } else $("kNetHint").innerHTML = s.i > 0 ? (net >= 0 ? '<span class="pill good">' + Math.round(net / s.i * 100) + '% kept</span>' : '<span class="pill bad">Over by ' + esc(money(-net)) + '</span>') : (s.o > 0 ? '<span class="pill bad">No money in logged</span>' : "Nothing logged yet");
     renderPlans(net);
+    renderBudgets(cur);
     renderCats(cur, s.o);
     renderTrend();
     renderList(cur);
@@ -207,6 +209,91 @@
     $("txList").innerHTML = html;
   }
 
+
+
+  /* ---------- budgets ---------- */
+  function spentIn(cat, m) { return monthTx(m).filter(t => t.type !== "income" && t.category === cat).reduce((a, t) => a + t.amount, 0); }
+  function budgetState(cat, m) {
+    const limit = Number((st.settings.budgets || {})[cat]); if (!(limit > 0)) return null;
+    const spent = spentIn(cat, m), left = limit - spent, pct = spent / limit;
+    return { limit, spent, left, pct, level: pct > 1 ? "over" : pct >= 0.8 ? "warn" : "ok" };
+  }
+  function renderBudgets() {
+    const b = st.settings.budgets || {};
+    const cats = Object.keys(b).filter(c => Number(b[c]) > 0);
+    if (!cats.length) { $("budgetList").innerHTML = '<div class="empty">No budgets yet. Set one for something like Transport, and every transport expense will count down from it.</div>'; return; }
+    const isNow = st.month === ym(new Date());
+    const [y, mo] = st.month.split("-").map(Number);
+    const daysLeft = isNow ? new Date(y, mo, 0).getDate() - new Date().getDate() + 1 : 0;
+    const rows = cats.map(c => ({ c, ...budgetState(c, st.month) })).sort((a, b2) => b2.pct - a.pct);
+    $("budgetList").innerHTML = rows.map(r => {
+      const col = r.level === "over" ? "var(--expense)" : r.level === "warn" ? "#d48a12" : "var(--income)";
+      const status = r.left >= 0 ? '<b class="num" style="color:' + col + '">' + esc(money(r.left)) + '</b> left' : '<b class="num" style="color:var(--expense)">Over by ' + esc(money(-r.left)) + '</b>';
+      const perDay = isNow && r.left > 0 && daysLeft > 1 ? ' · about ' + esc(money(r.left / daysLeft)) + '/day for ' + daysLeft + ' days' : "";
+      return '<button type="button" class="budget" data-b="' + esc(r.c) + '">' +
+        '<div class="bt"><span class="name"><span class="dot" style="background:' + catColor(r.c, "expense") + '"></span>' + esc(r.c) + '</span><span class="st">' + status + '</span></div>' +
+        '<div class="bar"><i style="width:' + Math.min(100, Math.max(r.spent > 0 ? 2 : 0, r.pct * 100)) + '%;background:' + col + '"></i></div>' +
+        '<div class="bs num">' + esc(money(r.spent)) + ' of ' + esc(money(r.limit)) + ' used' + perDay + '</div></button>';
+    }).join("");
+  }
+  const be = { cat: null, existing: false };
+  function renderBudgetChips() {
+    const b = st.settings.budgets || {};
+    $("bChips").innerHTML = st.settings.expenseCats.map(c => '<button type="button" class="chip" data-c="' + esc(c) + '" aria-pressed="' + (c === be.cat) + '"><span class="dot" style="background:' + catColor(c, "expense") + '"></span>' + esc(c) + (Number(b[c]) > 0 && c !== be.cat ? ' <span class="num" style="color:var(--muted);font-size:12px">' + esc(shortMoney(Number(b[c]))) + '</span>' : "") + '</button>').join("");
+  }
+  function openBudget(cat) {
+    be.cat = cat || null; be.existing = !!cat;
+    $("budTitle").textContent = cat ? "Edit " + cat + " budget" : "Set a monthly budget";
+    $("bAmt").value = cat ? String((st.settings.budgets || {})[cat]) : "";
+    $("bErr").textContent = "";
+    $("bDel").classList.toggle("hidden", !cat);
+    renderBudgetChips();
+    $("budOv").classList.add("open");
+  }
+  function closeBudget() { $("budOv").classList.remove("open"); }
+  $("addBudget").addEventListener("click", () => openBudget(null));
+  $("budgetList").addEventListener("click", e => { const b = e.target.closest("[data-b]"); if (b) openBudget(b.dataset.b); });
+  $("bCancel").addEventListener("click", closeBudget);
+  $("budOv").addEventListener("click", e => { if (e.target === $("budOv")) closeBudget(); });
+  $("bChips").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    be.cat = b.dataset.c; $("bErr").textContent = "";
+    const cur = Number((st.settings.budgets || {})[be.cat]);
+    if (cur > 0 && !$("bAmt").value) $("bAmt").value = String(cur);
+    renderBudgetChips(); $("bAmt").focus();
+  });
+  async function writeBudgets(next) {
+    const prev = st.settings.budgets;
+    st.settings.budgets = next;
+    try { await saveSettings(); } catch (e) { st.settings.budgets = prev; throw e; }
+  }
+  $("budForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const amt = parseFloat(String($("bAmt").value).replace(/[^0-9.]/g, ""));
+    if (!be.cat) { $("bErr").textContent = "Choose a category."; return; }
+    if (!(amt > 0)) { $("bErr").textContent = "Enter an amount above zero."; $("bAmt").focus(); return; }
+    $("bSave").disabled = true;
+    try { await writeBudgets({ ...(st.settings.budgets || {}), [be.cat]: Math.round(amt * 100) / 100 }); closeBudget(); render(); toast(be.cat + " budget: " + money(amt) + " a month"); }
+    catch (err) { $("bErr").textContent = "Couldn't save. Try again."; }
+    finally { $("bSave").disabled = false; }
+  });
+  $("bDel").addEventListener("click", async () => {
+    const next = { ...(st.settings.budgets || {}) }; delete next[be.cat];
+    try { await writeBudgets(next); closeBudget(); render(); toast("Budget removed"); } catch (e) { $("bErr").textContent = "Couldn't remove. Try again."; }
+  });
+  function updateBudgetHint() {
+    const el = $("budgetHint");
+    const bs = ed.type === "expense" && ed.category ? budgetState(ed.category, ($("fDate").value || today()).slice(0, 7)) : null;
+    if (!bs) { el.classList.add("hidden"); return; }
+    const orig = ed.id ? st.txs.find(t => t.id === ed.id) : null;
+    const already = orig && orig.category === ed.category && orig.type === "expense" && orig.date.slice(0, 7) === ($("fDate").value || "").slice(0, 7) ? orig.amount : 0;
+    const amt = parseFloat(String($("fAmt").value).replace(/[^0-9.]/g, "")) || 0;
+    const after = bs.left + already - amt;
+    el.innerHTML = esc(ed.category) + " budget: <b class=\"num\">" + esc(money(bs.left + already)) + "</b> left" + (amt > 0 ? (after >= 0 ? ", <b class=\"num\">" + esc(money(after)) + "</b> after this" : ', <b style="color:var(--expense)">this goes over by ' + esc(money(-after)) + "</b>") : "");
+    el.classList.remove("hidden");
+  }
+  $("fAmt").addEventListener("input", updateBudgetHint);
+  $("fDate").addEventListener("change", updateBudgetHint);
 
   /* ---------- plans ---------- */
   function openPlans() { return st.plans.filter(x => !x.done); }
@@ -383,6 +470,7 @@
       '<button type="button" class="chip" data-c="' + esc(c) + '" aria-pressed="' + (c === ed.category) + '"><span class="dot" style="background:' + catColor(c, ed.type) + '"></span>' + esc(c) +
       (c === ed.suggested && c !== ed.category ? '<span class="sugg">suggested</span>' : "") + '</button>').join("") +
       '<button type="button" class="chip add" id="chipAdd">+ New</button>';
+    updateBudgetHint();
   }
 
   $("typeToggle").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; if (ed.type !== b.dataset.t) { ed.type = b.dataset.t; ed.category = null; ed.suggested = null; if (ed.type === "income") ed.planId = null; syncType(); } });
@@ -437,7 +525,11 @@
       if (saved.date.slice(0, 7) !== st.month) st.month = saved.date.slice(0, 7);
       render();
       if (!wasEdit && saved.type === "income" && openPlans().length) showReminder(saved.amount);
-      else toast((wasEdit ? "Updated" : (saved.type === "income" ? "Money in added" : "Expense added") + " · " + saved.category) + planMsg);
+      else {
+        const bs = saved.type === "expense" ? budgetState(saved.category, saved.date.slice(0, 7)) : null;
+        const bMsg = bs ? (bs.left >= 0 ? " · " + money(bs.left) + " left in budget" : " · over budget by " + money(-bs.left)) : "";
+        toast((wasEdit ? "Updated" : (saved.type === "income" ? "Money in added" : "Expense added") + " · " + saved.category) + (bMsg || planMsg));
+      }
     } catch (err) {
       $("fErr").textContent = /fetch|network/i.test((err && err.message) || "") ? "No internet connection. Try again when you're online." : "Couldn't save. Try again.";
     } finally { $("saveBtn").disabled = false; }
@@ -553,7 +645,7 @@
     document.querySelectorAll(".seg button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); render();
   });
   $("search").addEventListener("input", e => { st.q = e.target.value; render(); });
-  document.addEventListener("keydown", e => { if (e.key === "Escape") { if ($("remOv").classList.contains("open")) $("remOv").classList.remove("open"); else if ($("planOv").classList.contains("open")) closePlan(); else if ($("rcptOv").classList.contains("open")) $("rcptOv").classList.remove("open"); else if ($("setOv").classList.contains("open")) closeSettings(); else if ($("entryOv").classList.contains("open")) closeEntry(); } });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") { if ($("budOv").classList.contains("open")) closeBudget(); else if ($("remOv").classList.contains("open")) $("remOv").classList.remove("open"); else if ($("planOv").classList.contains("open")) closePlan(); else if ($("rcptOv").classList.contains("open")) $("rcptOv").classList.remove("open"); else if ($("setOv").classList.contains("open")) closeSettings(); else if ($("entryOv").classList.contains("open")) closeEntry(); } });
 
   render();
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});

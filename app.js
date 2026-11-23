@@ -825,10 +825,12 @@
   const be = { cat: null, existing: false };
   function renderBudgetChips() {
     const b = st.settings.budgets || {};
-    $("bChips").innerHTML = st.settings.expenseCats.map(c => '<button type="button" class="chip" data-c="' + esc(c) + '" aria-pressed="' + (c === be.cat) + '"><span class="dot" style="background:' + catColor(c, "expense") + '"></span>' + esc(c) + (Number(b[c]) > 0 && c !== be.cat ? ' <span class="num" style="color:var(--muted);font-size:12px">' + esc(shortMoney(Number(b[c]))) + '</span>' : "") + '</button>').join("");
+    $("bChips").innerHTML = st.settings.expenseCats.map(c => '<button type="button" class="chip" data-c="' + esc(c) + '" aria-pressed="' + (c === be.cat) + '"><span class="dot" style="background:' + catColor(c, "expense") + '"></span>' + esc(c) + (Number(b[c]) > 0 && c !== be.cat ? ' <span class="num" style="color:var(--muted);font-size:12px">' + esc(shortMoney(Number(b[c]))) + '</span>' : "") + '</button>').join("") +
+      '<button type="button" class="chip add" data-new="1">+ New</button>';
   }
   function openBudget(cat) {
     be.cat = cat || null; be.existing = !!cat;
+    $("bNewRow").classList.add("hidden"); $("bNewCat").value = "";
     $("budTitle").textContent = cat ? "Edit " + cat + " budget" : "Set a monthly budget";
     $("bAmt").value = cat ? String((st.settings.budgets || {})[cat]) : "";
     $("bErr").textContent = "";
@@ -843,6 +845,7 @@
   $("budOv").addEventListener("click", e => { if (e.target === $("budOv")) closeBudget(); });
   $("bChips").addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.new) { $("bNewRow").classList.remove("hidden"); $("bNewCat").focus(); return; }
     be.cat = b.dataset.c; $("bErr").textContent = "";
     const cur = Number((st.settings.budgets || {})[be.cat]);
     if (cur > 0 && !$("bAmt").value) $("bAmt").value = String(cur);
@@ -856,7 +859,7 @@
   $("budForm").addEventListener("submit", async e => {
     e.preventDefault();
     const amt = parseFloat(String($("bAmt").value).replace(/[^0-9.]/g, ""));
-    if (!be.cat) { $("bErr").textContent = "Choose a category."; return; }
+    if (!be.cat) { $("bErr").textContent = "Choose a category, or tap + New to make one."; return; }
     if (!(amt > 0)) { $("bErr").textContent = "Enter an amount above zero."; $("bAmt").focus(); return; }
     $("bSave").disabled = true;
     try { await writeBudgets({ ...(st.settings.budgets || {}), [be.cat]: Math.round(amt * 100) / 100 }); closeBudget(); render(); toast(be.cat + " budget: " + money(amt) + " a month"); }
@@ -1016,10 +1019,34 @@
   function renderPlanChips() {
     const list = st.settings.expenseCats;
     const all = pe.category && !list.includes(pe.category) ? [...list, pe.category] : list;
-    $("pChips").innerHTML = all.map(c => '<button type="button" class="chip" data-c="' + esc(c) + '" aria-pressed="' + (c === pe.category) + '"><span class="dot" style="background:' + catColor(c, "expense") + '"></span>' + esc(c) + '</button>').join("");
+    $("pChips").innerHTML = all.map(c => '<button type="button" class="chip" data-c="' + esc(c) + '" aria-pressed="' + (c === pe.category) + '"><span class="dot" style="background:' + catColor(c, "expense") + '"></span>' + esc(c) + '</button>').join("") +
+      '<button type="button" class="chip add" data-new="1">+ New</button>';
   }
+  // Add a spending category from any sheet; returns its saved name.
+  async function addExpenseCat(raw) {
+    const name = String(raw || "").trim().replace(/\s+/g, " ").slice(0, 40);
+    if (!name) return null;
+    const found = st.settings.expenseCats.find(c => c.toLowerCase() === name.toLowerCase());
+    if (found) return found;
+    st.settings.expenseCats = [...st.settings.expenseCats, name];
+    try { await saveSettings(); } catch (_) { toast("Couldn't save the new category. Check your connection."); }
+    return name;
+  }
+  function wireNewCat(p, onPick) {
+    const go = async () => {
+      const name = await addExpenseCat($(p + "NewCat").value);
+      if (!name) { $(p + "NewCat").focus(); return; }
+      $(p + "NewCat").value = ""; $(p + "NewRow").classList.add("hidden");
+      onPick(name); toast("Category added · " + name);
+    };
+    $(p + "NewAdd").addEventListener("click", go);
+    $(p + "NewCat").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); go(); } });
+  }
+  wireNewCat("p", name => { pe.category = name; $("pErr").textContent = ""; renderPlanChips(); });
+  wireNewCat("b", name => { be.cat = name; $("bErr").textContent = ""; renderBudgetChips(); $("bAmt").focus(); });
   function openPlan(x) {
     pe.id = x ? x.id : null; pe.category = x ? x.category : null;
+    $("pNewRow").classList.add("hidden"); $("pNewCat").value = "";
     $("planTitle").textContent = x ? "Edit plan" : "New plan";
     $("pTitle").value = x ? x.title : ""; $("pAmt").value = x ? String(x.amount) : ""; $("pDue").value = x && x.due_date ? x.due_date : "";
     $("pStart").value = x && x.start_date ? x.start_date : ""; $("pEnd").value = x && x.end_date ? x.end_date : ""; $("pRepeat").checked = !!(x && x.repeat === "weekly");
@@ -1036,7 +1063,11 @@
   $("addPlan").addEventListener("click", () => openPlan(null));
   $("pCancel").addEventListener("click", closePlan);
   $("planOv").addEventListener("click", e => { if (e.target === $("planOv")) closePlan(); });
-  $("pChips").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; pe.category = b.dataset.c; $("pErr").textContent = ""; renderPlanChips(); });
+  $("pChips").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.new) { $("pNewRow").classList.remove("hidden"); $("pNewCat").focus(); return; }
+    pe.category = b.dataset.c; $("pErr").textContent = ""; renderPlanChips();
+  });
   $("planForm").addEventListener("submit", async e => {
     e.preventDefault();
     let title = $("pTitle").value.trim().slice(0, 80);
@@ -1044,7 +1075,7 @@
     const period = pe.kind === "period", ps = $("pStart").value, pend = $("pEnd").value, weekly = period && $("pRepeat").checked;
     if (!title && !period) { $("pErr").textContent = "Say what this money is for."; $("pTitle").focus(); return; }
     if (!(amt > 0)) { $("pErr").textContent = "Enter an amount above zero."; $("pAmt").focus(); return; }
-    if (!pe.category) { $("pErr").textContent = "Choose what it falls under."; return; }
+    if (!pe.category) { $("pErr").textContent = "Choose a category, or tap + New to make one."; return; }
     if (period && (!ps || !pend)) { $("pErr").textContent = "Pick the first and last day, or tap one of the quick options."; return; }
     if (period && pend < ps) { $("pErr").textContent = "The last day can't be before the first day."; return; }
     if (weekly && dayDiff(ps, pend) > 6) { $("pErr").textContent = "A plan that repeats every week can cover up to 7 days."; return; }

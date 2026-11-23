@@ -299,6 +299,9 @@
     <div class="sub">Set money aside for a payment, or for spending over a few days, so it doesn't go on something else.</div>
     <div class="field"><label for="pTitle">What it's for</label><input id="pTitle" placeholder="e.g. Rent for December, Bus fare this week" autocomplete="off" maxlength="80"></div>
     <div class="field"><label for="pAmt">Amount (<span class="curLbl">Rs</span>)</label><input id="pAmt" class="big" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+    <div class="ask">Category</div>
+    <div class="chips" id="pChips"></div>
+    <div class="newcat hidden" id="pNewRow"><input id="pNewCat" class="search" maxlength="40" placeholder="New category, e.g. Hair, Church, Eban" aria-label="New category name"><button type="button" class="btn" id="pNewAdd">Add</button></div>
     <div class="ask">Is it one payment or a time period?</div>
     <div class="typetoggle" id="pKind">
       <button type="button" data-k="once">One payment</button>
@@ -315,8 +318,6 @@
       <label class="check"><input type="checkbox" id="pRepeat"> Repeat every week</label>
       <div class="sub" id="pHint"></div>
     </div>
-    <div class="ask">What does it fall under?</div>
-    <div class="chips" id="pChips"></div>
     <div class="err" id="pErr"></div>
     <div class="actions">
       <button type="button" class="btn danger hidden" id="pDel">Delete</button>
@@ -335,8 +336,9 @@
   <form class="sheet" id="budForm" novalidate>
     <h2 id="budTitle">Set a monthly budget</h2>
     <div class="sub">Choose a category and how much you allow for it each month. Spending in that category counts down automatically, and it starts fresh on the 1st.</div>
-    <div class="ask">Which category?</div>
+    <div class="ask">Category</div>
     <div class="chips" id="bChips"></div>
+    <div class="newcat hidden" id="bNewRow"><input id="bNewCat" class="search" maxlength="40" placeholder="New category, e.g. Hair, Church, Eban" aria-label="New category name"><button type="button" class="btn" id="bNewAdd">Add</button></div>
     <div class="field"><label for="bAmt">Amount per month (<span class="curLbl">Rs</span>)</label><input id="bAmt" class="big" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
     <div class="err" id="bErr"></div>
     <div class="actions">

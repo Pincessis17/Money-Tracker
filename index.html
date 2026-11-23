@@ -126,6 +126,10 @@
 
   <section class="view hidden" id="view-rates" aria-label="Currencies">
     <header class="pagehead"><h1 class="display">Currencies</h1><span class="sub" id="fxSub"></span></header>
+    <section class="card" id="trackCard">
+      <div class="card-head"><h2>Currency tracker</h2><button type="button" class="pillbtn" id="addTrack">+ Track a currency</button></div>
+      <div id="trackList"></div>
+    </section>
     <section class="card hold" id="fxCard">
       <div class="card-head"><h2>My foreign money</h2><button type="button" class="pillbtn" id="addHold">+ Add exchange</button></div>
       <div id="holdList"></div>
@@ -317,6 +321,34 @@
       <div class="right">
         <button type="button" class="btn ghost" id="hCancel">Cancel</button>
         <button type="submit" class="btn primary" id="hSave">Save</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+
+<!-- Tracker sheet -->
+<div class="overlay" id="trkOv" role="dialog" aria-modal="true" aria-labelledby="trkTitle">
+  <form class="sheet" id="trkForm" novalidate>
+    <h2 id="trkTitle">Add to your tracker</h2>
+    <div class="sub" id="trkSub">The amount stays saved, and you'll see what it's worth in other currencies as rates change.</div>
+    <div class="field"><label>Currency</label><div class="chips" id="trkCcy"></div></div>
+    <div class="typetoggle" id="trkDir">
+      <button type="button" data-d="in" class="in">Received</button>
+      <button type="button" data-d="out" class="out">Took out</button>
+    </div>
+    <div class="row2">
+      <div class="field"><label for="trkAmt" id="trkAmtLbl">Amount</label><input id="trkAmt" class="big" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+      <div class="field"><label for="trkDate">Date</label><input id="trkDate" type="date"></div>
+    </div>
+    <div class="field"><label for="trkNote">Note (optional)</label><input id="trkNote" maxlength="80" placeholder="e.g. From mum, savings, gift" autocomplete="off"></div>
+    <div class="sub" id="trkHint"></div>
+    <div class="err" id="trkErr"></div>
+    <div class="actions">
+      <button type="button" class="btn danger hidden" id="trkDel">Delete entry</button>
+      <div class="right">
+        <button type="button" class="btn ghost" id="trkCancel">Cancel</button>
+        <button type="submit" class="btn primary" id="trkSave">Save</button>
       </div>
     </div>
   </form>

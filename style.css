@@ -292,3 +292,27 @@ body:not(.signedout) #authView { display: none; }
 .plan .pextra .sub { font-size: 12px; }
 .rep { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink); margin-left: 4px; }
 #pKind button.on { background: var(--surface); color: var(--accent-ink); box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+
+/* currency tracker */
+.trk { padding: 14px 0; border-bottom: 1px solid var(--line); display: grid; gap: 10px; }
+.trk:first-child { padding-top: 2px; }
+.trk:last-child { border-bottom: 0; padding-bottom: 2px; }
+.trkhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.trkbal { display: grid; gap: 2px; min-width: 0; }
+.trkbal b { font-size: 30px; line-height: 1.1; overflow-wrap: anywhere; }
+.trkbtns { display: flex; gap: 6px; flex: none; }
+.trkbtns button { height: 38px; min-width: 44px; padding: 0 12px; border-radius: 19px; border: 1px solid var(--line); background: var(--surface); font-weight: 600; font-size: 13px; color: var(--ink); }
+.trkbtns button.addbtn { background: var(--accent-ink); border-color: var(--accent-ink); color: #fff; }
+.trkgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.trkv { padding: 10px 12px; border-radius: 14px; background: var(--tile); display: grid; gap: 2px; min-width: 0; }
+.trkv span { font-size: 11px; color: var(--muted); }
+.trkv b { font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trkv i { font-style: normal; font-size: 11px; font-weight: 600; }
+.trkhist { font-size: 13px; }
+.trkhist summary { cursor: pointer; color: var(--accent-ink); font-weight: 600; padding: 4px 0; list-style: none; }
+.trkhist summary::-webkit-details-marker { display: none; }
+.trkrow { display: flex; justify-content: space-between; gap: 8px; width: 100%; border: 0; background: none; padding: 8px 2px; border-bottom: 1px solid var(--line); text-align: left; font-size: 13px; }
+.trkrow:last-child { border-bottom: 0; }
+.trkrow span:first-child { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#trkDir button.on.in { background: var(--surface); color: var(--good); }
+#trkDir button.on.out { background: var(--surface); color: var(--bad); }

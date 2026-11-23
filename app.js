@@ -15,7 +15,7 @@
   };
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-  const st = { holds: [], fx: [], fxTried: false, user: null, txs: [], plans: [], showDone: false, settings: clone(DEFAULTS), hasSettingsRow: false, month: ym(new Date()), filter: "all", q: "" };
+  const st = { track: [], holds: [], fx: [], fxTried: false, user: null, txs: [], plans: [], showDone: false, settings: clone(DEFAULTS), hasSettingsRow: false, month: ym(new Date()), filter: "all", q: "" };
 
   function ym(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); }
   function today() { const d = new Date(); return ym(d) + "-" + String(d.getDate()).padStart(2, "0"); }
@@ -89,26 +89,28 @@
     if ((u && u.id) === (st.user && st.user.id)) return;
     st.user = u;
     document.body.classList.toggle("signedout", !u);
-    if (u) { $("aPass").value = ""; try { localStorage.setItem("mm-has-account", "1"); } catch (_) {} loadAll(); } else { st.holds = []; st.txs = []; st.plans = []; st.settings = clone(DEFAULTS); }
+    if (u) { $("aPass").value = ""; try { localStorage.setItem("mm-has-account", "1"); } catch (_) {} loadAll(); } else { st.track = []; st.holds = []; st.txs = []; st.plans = []; st.settings = clone(DEFAULTS); }
   });
 
   /* ---------- data ---------- */
   async function loadAll() {
     $("syncNote").textContent = "Loading your records…";
     render();
-    const [tx, set, pl, hl] = await Promise.all([
+    const [tx, set, pl, hl, tk] = await Promise.all([
       sb.from("transactions").select("*").order("date", { ascending: false }).order("created_at", { ascending: false }),
       sb.from("settings").select("*").maybeSingle(),
       sb.from("plans").select("*").order("created_at", { ascending: true }),
-      sb.from("fx_holdings").select("*").order("date", { ascending: false })
+      sb.from("fx_holdings").select("*").order("date", { ascending: false }),
+      sb.from("fx_tracker").select("*").order("date", { ascending: true }).order("created_at", { ascending: true })
     ]);
-    if (tx.error || set.error || pl.error || hl.error) {
+    if (tx.error || set.error || pl.error || hl.error || tk.error) {
       $("syncNote").textContent = "Not synced";
       banner("Couldn't load your records. Check your connection and pull down or reopen the app.");
       return;
     }
     banner("");
     st.txs = tx.data.map(t => ({ ...t, amount: Number(t.amount) }));
+    st.track = tk.data.map(x => ({ ...x, amount: Number(x.amount) }));
     st.holds = hl.data.map(x => ({ ...x, amount: Number(x.amount), cost_mur: Number(x.cost_mur) }));
     st.plans = pl.data.map(x => ({ ...x, amount: Number(x.amount) }));
     if (set.data) {
@@ -343,6 +345,7 @@
   /* ---------- currencies ---------- */
   const FX = [
     { ccy: "USD", name: "US dollar", sym: "$", src: "mcb" },
+    { ccy: "EUR", name: "Euro", sym: "€", src: "mcb" },
     { ccy: "GBP", name: "British pound", sym: "£", src: "mcb" },
     { ccy: "GHS", name: "Ghana cedi", sym: "GH₵", src: "market" }
   ];
@@ -397,6 +400,7 @@
       $("fxList").innerHTML = '<div class="empty">' + (miss ? "Exchange rates switch on once the rate API keys are added in Supabase." : st.fxTried ? "Couldn't get today's rates yet. They update every morning." : "Loading exchange rates…") + '</div>';
       $("fxConv").classList.add("hidden");
       renderHolds();
+      renderTracker();
       return;
     }
     const newest = have.map(x => x.last.day).sort().pop();
@@ -429,6 +433,7 @@
     $("fxConv").classList.remove("hidden");
     convert();
     renderHolds();
+    renderTracker();
   }
   function convert() {
     const amt = parseFloat(String($("cvAmt").value).replace(/[^0-9.]/g, ""));
@@ -448,6 +453,133 @@
   $("cvFrom").addEventListener("change", () => { if ($("cvFrom").value === $("cvTo").value) $("cvTo").value = [...$("cvTo").options].map(o => o.value).find(c => c !== $("cvFrom").value); convert(); });
   $("cvTo").addEventListener("change", convert);
 
+
+
+  /* ---------- currency tracker ---------- */
+  const TRK = [{ ccy: "MUR", name: "Mauritian rupee", sym: "Rs ", src: null }, ...FX];
+  const trkMeta = c => TRK.find(x => x.ccy === c) || { ccy: c, name: c, sym: c + " ", src: null };
+  // MUR value of 1 unit of ccy (mid rate), on a given day (latest known on or before it), or now.
+  function murRate(ccy, day) {
+    if (ccy === "MUR") return 1;
+    const f = FX.find(x => x.ccy === ccy); if (!f) return null;
+    const ser = series(f); if (!ser.length) return null;
+    if (!day) return ser[ser.length - 1].mid;
+    let r = null; for (const x of ser) { if (x.day <= day) r = x; }
+    return r ? r.mid : null;
+  }
+  function fmtC(n, ccy) {
+    const m = trkMeta(ccy), v = (Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return ccy === "MUR" ? money(n) : m.sym + v;
+  }
+  function trkBalances() {
+    const by = {};
+    for (const e of st.track) by[e.ccy] = (by[e.ccy] || 0) + e.amount;
+    const order = [];
+    for (const e of st.track) if (!order.includes(e.ccy)) order.push(e.ccy);
+    return order.map(c => ({ ccy: c, bal: Math.round(by[c] * 100) / 100 }));
+  }
+  function renderTracker() {
+    const bals = trkBalances();
+    if (!bals.length) {
+      $("trackList").innerHTML = '<div class="empty">Enter an amount once, like €200, and keep watching what it\'s worth in rupees, dollars, cedis and pounds as rates change. Add more whenever you receive it.</div>';
+      return;
+    }
+    const newest = st.fx.length ? st.fx[st.fx.length - 1].day : null;
+    const weekAgo = newest ? shiftDay(newest, -7) : null;
+    $("trackList").innerHTML = bals.map(({ ccy, bal }) => {
+      const m = trkMeta(ccy), rNow = murRate(ccy), entries = st.track.filter(e => e.ccy === ccy);
+      const targets = TRK.filter(t => t.ccy !== ccy);
+      const tiles = targets.map(t => {
+        const tNow = murRate(t.ccy);
+        if (!(rNow > 0) || !(tNow > 0)) return '<div class="trkv"><span>' + esc(t.ccy) + '</span><b class="sub">no rate yet</b></div>';
+        const v = bal * rNow / tNow;
+        const rOld = weekAgo ? murRate(ccy, weekAgo) : null, tOld = weekAgo ? murRate(t.ccy, weekAgo) : null;
+        let ch = "";
+        if (rOld > 0 && tOld > 0 && bal !== 0) {
+          const old = bal * rOld / tOld, pct = (v - old) / Math.abs(old) * 100;
+          ch = Math.abs(pct) < 0.005 ? '<i class="sub">no change this week</i>' :
+            '<i class="' + (pct > 0 ? "good" : "bad") + '">' + (pct > 0 ? "▲ +" : "▼ −") + esc(fmtC(Math.abs(v - old), t.ccy)) + ' this week</i>';
+        }
+        return '<div class="trkv"><span>in ' + esc(t.name) + '</span><b class="num">' + esc(fmtC(v, t.ccy)) + '</b>' + ch + '</div>';
+      }).join("");
+      const hist = [...entries].reverse().map(e => '<button type="button" class="trkrow" data-trk="' + esc(e.id) + '"><span>' + esc(new Date(e.date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })) + (e.note ? " · " + esc(e.note) : "") + '</span><b class="num ' + (e.amount > 0 ? "good" : "bad") + '">' + (e.amount > 0 ? "+" : "−") + esc(fmtC(Math.abs(e.amount), ccy)) + '</b></button>').join("");
+      return '<div class="trk"><div class="trkhead"><div class="trkbal"><span class="sub">' + esc(m.name) + ' balance</span><b class="display num">' + esc(fmtC(bal, ccy)) + '</b></div>' +
+        '<div class="trkbtns"><button type="button" class="addbtn" data-trkadd="' + ccy + '" aria-label="Add ' + esc(m.name) + ' received">+ Add</button><button type="button" data-trkout="' + ccy + '" aria-label="Take ' + esc(m.name) + ' out">−</button></div></div>' +
+        '<div class="trkgrid">' + tiles + '</div>' +
+        '<details class="trkhist"><summary>History (' + entries.length + ')</summary>' + hist + '</details></div>';
+    }).join("") + '<div class="sub" style="margin-top:8px;font-size:12px">Values use mid rates (MCB for USD, EUR and GBP; market rate for GHS). "This week" compares with rates from 7 days earlier.</div>';
+  }
+  const tk = { id: null, ccy: "EUR", dir: "in" };
+  function renderTrkChips() {
+    $("trkCcy").innerHTML = TRK.map(t => '<button type="button" class="chip" data-c="' + t.ccy + '" aria-pressed="' + (t.ccy === tk.ccy) + '">' + t.ccy + '</button>').join("");
+    document.querySelectorAll("#trkDir button").forEach(b => b.classList.toggle("on", b.dataset.d === tk.dir));
+    $("trkAmtLbl").textContent = "Amount (" + tk.ccy + ")";
+    trkHint();
+  }
+  function trkHint() {
+    const bal = (trkBalances().find(b => b.ccy === tk.ccy) || { bal: 0 }).bal;
+    const orig = tk.id ? st.track.find(e => e.id === tk.id) : null;
+    const base = bal - (orig ? orig.amount : 0);
+    const amt = parseFloat(String($("trkAmt").value).replace(/[^0-9.]/g, "")) || 0;
+    const after = base + (tk.dir === "in" ? amt : -amt);
+    $("trkHint").textContent = (base !== 0 || amt > 0) ? "Balance " + fmtC(base, tk.ccy) + (amt > 0 ? " → " + fmtC(after, tk.ccy) : "") : "";
+  }
+  function openTrk(opts) {
+    const e = opts && opts.entry;
+    tk.id = e ? e.id : null;
+    tk.ccy = e ? e.ccy : (opts && opts.ccy) || (trkBalances()[0] || {}).ccy || "EUR";
+    tk.dir = e ? (e.amount > 0 ? "in" : "out") : (opts && opts.dir) || "in";
+    $("trkTitle").textContent = e ? "Edit entry" : tk.dir === "out" ? "Take out of your tracker" : "Add to your tracker";
+    $("trkAmt").value = e ? String(Math.abs(e.amount)) : "";
+    $("trkDate").value = e ? e.date : today();
+    $("trkNote").value = e ? e.note : "";
+    $("trkErr").textContent = "";
+    $("trkDel").classList.toggle("hidden", !e);
+    renderTrkChips();
+    $("trkOv").classList.add("open");
+    if (!e) setTimeout(() => $("trkAmt").focus(), 50);
+  }
+  function closeTrk() { $("trkOv").classList.remove("open"); }
+  $("addTrack").addEventListener("click", () => openTrk({ ccy: trkBalances().length ? undefined : "EUR" }));
+  $("trackList").addEventListener("click", e => {
+    const a = e.target.closest("[data-trkadd]"); if (a) return openTrk({ ccy: a.dataset.trkadd, dir: "in" });
+    const o = e.target.closest("[data-trkout]"); if (o) return openTrk({ ccy: o.dataset.trkout, dir: "out" });
+    const r = e.target.closest("[data-trk]"); if (r) { const en = st.track.find(x => x.id === r.dataset.trk); if (en) openTrk({ entry: en }); }
+  });
+  $("trkCcy").addEventListener("click", e => { const b = e.target.closest("[data-c]"); if (!b) return; tk.ccy = b.dataset.c; renderTrkChips(); });
+  $("trkDir").addEventListener("click", e => { const b = e.target.closest("[data-d]"); if (!b) return; tk.dir = b.dataset.d; renderTrkChips(); });
+  $("trkAmt").addEventListener("input", trkHint);
+  $("trkCancel").addEventListener("click", closeTrk);
+  $("trkOv").addEventListener("click", e => { if (e.target === $("trkOv")) closeTrk(); });
+  $("trkForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const amt = parseFloat(String($("trkAmt").value).replace(/[^0-9.]/g, ""));
+    if (!(amt > 0)) { $("trkErr").textContent = "Enter an amount above zero."; $("trkAmt").focus(); return; }
+    if (!$("trkDate").value) { $("trkErr").textContent = "Pick the date."; return; }
+    const bal = (trkBalances().find(b => b.ccy === tk.ccy) || { bal: 0 }).bal;
+    const orig = tk.id ? st.track.find(x => x.id === tk.id) : null;
+    const signed = Math.round((tk.dir === "in" ? amt : -amt) * 100) / 100;
+    if (bal - (orig ? orig.amount : 0) + signed < -0.004) { $("trkErr").textContent = "That's more than your " + tk.ccy + " balance of " + fmtC(bal - (orig ? orig.amount : 0), tk.ccy) + "."; return; }
+    const row = { ccy: tk.ccy, amount: signed, date: $("trkDate").value, note: $("trkNote").value.trim().slice(0, 80) };
+    $("trkSave").disabled = true;
+    try {
+      const res = tk.id ? await sb.from("fx_tracker").update(row).eq("id", tk.id).select().single() : await sb.from("fx_tracker").insert(row).select().single();
+      if (res.error) throw res.error;
+      const saved = { ...res.data, amount: Number(res.data.amount) };
+      st.track = (tk.id ? st.track.map(x => x.id === tk.id ? saved : x) : [...st.track, saved]).sort((a, b) => a.date.localeCompare(b.date) || (a.created_at || "").localeCompare(b.created_at || ""));
+      closeTrk(); render();
+      const nb = trkBalances().find(b => b.ccy === saved.ccy);
+      toast((tk.id ? "Updated" : signed > 0 ? "Added " + fmtC(signed, saved.ccy) : "Took out " + fmtC(-signed, saved.ccy)) + " · balance " + fmtC(nb ? nb.bal : 0, saved.ccy));
+    } catch (err) { $("trkErr").textContent = "Couldn't save. Check your connection and try again."; }
+    finally { $("trkSave").disabled = false; }
+  });
+  $("trkDel").addEventListener("click", async () => {
+    if ($("trkDel").dataset.confirm !== "1") { $("trkDel").dataset.confirm = "1"; $("trkDel").textContent = "Tap again to delete"; setTimeout(() => { $("trkDel").dataset.confirm = ""; $("trkDel").textContent = "Delete entry"; }, 3000); return; }
+    $("trkDel").dataset.confirm = ""; $("trkDel").textContent = "Delete entry";
+    const { error } = await sb.from("fx_tracker").delete().eq("id", tk.id);
+    if (error) { $("trkErr").textContent = "Couldn't delete. Try again."; return; }
+    st.track = st.track.filter(x => x.id !== tk.id); closeTrk(); render(); toast("Entry deleted");
+  });
 
   /* ---------- my foreign money ---------- */
   function valueNow(hd) {
@@ -1075,7 +1207,7 @@
     document.querySelectorAll(".seg button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); render();
   });
   $("search").addEventListener("input", e => { st.q = e.target.value; render(); });
-  document.addEventListener("keydown", e => { if (e.key === "Escape") { if ($("addOv").classList.contains("open")) $("addOv").classList.remove("open"); else if ($("holdOv").classList.contains("open")) closeHold(); else if ($("budOv").classList.contains("open")) closeBudget(); else if ($("remOv").classList.contains("open")) $("remOv").classList.remove("open"); else if ($("planOv").classList.contains("open")) closePlan(); else if ($("rcptOv").classList.contains("open")) $("rcptOv").classList.remove("open"); else if ($("setOv").classList.contains("open")) closeSettings(); else if ($("entryOv").classList.contains("open")) closeEntry(); } });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") { if ($("trkOv").classList.contains("open")) closeTrk(); else if ($("addOv").classList.contains("open")) $("addOv").classList.remove("open"); else if ($("holdOv").classList.contains("open")) closeHold(); else if ($("budOv").classList.contains("open")) closeBudget(); else if ($("remOv").classList.contains("open")) $("remOv").classList.remove("open"); else if ($("planOv").classList.contains("open")) closePlan(); else if ($("rcptOv").classList.contains("open")) $("rcptOv").classList.remove("open"); else if ($("setOv").classList.contains("open")) closeSettings(); else if ($("entryOv").classList.contains("open")) closeEntry(); } });
 
   render();
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});

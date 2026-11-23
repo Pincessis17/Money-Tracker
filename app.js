@@ -89,19 +89,133 @@
     if ((u && u.id) === (st.user && st.user.id)) return;
     st.user = u;
     document.body.classList.toggle("signedout", !u);
-    if (u) { $("aPass").value = ""; try { localStorage.setItem("mm-has-account", "1"); } catch (_) {} loadAll(); } else { st.track = []; st.holds = []; st.txs = []; st.plans = []; st.settings = clone(DEFAULTS); }
+    if (u) { $("aPass").value = ""; try { localStorage.setItem("mm-has-account", "1"); } catch (_) {} startVault(); }
+    else { st.key = null; st.vault = null; document.body.classList.remove("locked"); st.track = []; st.holds = []; st.txs = []; st.plans = []; st.settings = clone(DEFAULTS); }
   });
+
+  /* ---------- private vault (end-to-end encryption) ---------- */
+  const BLANK = {
+    transactions: { type: null, amount: null, category: null, note: "", date: null, receipt_path: null },
+    plans: { title: null, amount: null, category: "-", due_date: null, done: false, paid_tx_id: null, done_at: null, start_date: null, end_date: null, repeat: "none" },
+    fx_holdings: { ccy: null, amount: null, cost_mur: null, date: null, note: "" },
+    fx_tracker: { ccy: null, amount: null, date: null, note: "" },
+    settings: { currency: "-", expense_cats: null, income_cats: null, budgets: {}, display_name: "", theme: "blush", avatar: "girl", skin: "brown" }
+  };
+  const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)));
+  async function putEnc(table, plain) {
+    if (!st.key) throw new Error("locked");
+    const { id, created_at, ...data } = plain;
+    const enc = await Vault.enc(st.key, data);
+    const row = table === "settings" ? { user_id: st.user.id, enc, ...BLANK.settings, updated_at: new Date().toISOString() } : { id, enc, ...BLANK[table] };
+    const { error } = await sb.from(table).upsert(row);
+    if (error) throw error;
+  }
+  function vaultMode(mode) {
+    document.body.classList.add("locked");
+    ["vSetup", "vCode", "vUnlock", "vRecover"].forEach(id => $(id).classList.toggle("hidden", id !== mode));
+    $("vErr").textContent = "";
+    const f = { vSetup: "vNew1", vUnlock: "vPass", vRecover: "vRecCode" }[mode];
+    if (f) setTimeout(() => $(f).focus(), 60);
+  }
+  async function startVault() {
+    $("syncNote").textContent = "Unlocking…";
+    const { data, error } = await sb.from("vault").select("*").maybeSingle();
+    if (error) { document.body.classList.remove("locked"); banner("Couldn't reach your records. Check your connection and reopen the app."); return; }
+    st.vault = data;
+    if (!data) return vaultMode("vSetup");
+    const k = await Vault.loadKey(st.user.id);
+    if (k) { st.key = k; document.body.classList.remove("locked"); return loadAll(); }
+    vaultMode("vUnlock");
+  }
+  async function vaultReady(key) {
+    st.key = key;
+    await Vault.saveKey(st.user.id, key);
+    $("vPass").value = ""; $("vNew1").value = ""; $("vNew2").value = ""; $("vRecCode").value = ""; $("vRecNew").value = "";
+    document.body.classList.remove("locked");
+    loadAll();
+  }
+  const passProblem = (a, b) => a.length < 8 ? "Use at least 8 characters. A few random words works well." : a !== b ? "The two passphrases don't match." : "";
+  $("vSetup").addEventListener("submit", async e => {
+    e.preventDefault();
+    const a = $("vNew1").value, b = $("vNew2").value, p = passProblem(a, b);
+    if (p) { $("vErr").textContent = p; return; }
+    $("vSetupBtn").disabled = true; $("vSetupBtn").textContent = "Setting up…";
+    try {
+      const v = await Vault.create(a);
+      const { error } = await sb.from("vault").insert({ pass: v.pass, rec: v.rec });
+      if (error) throw error;
+      st.vault = { pass: v.pass, rec: v.rec };
+      st.pendingKey = v.key;
+      $("vCodeText").textContent = v.code;
+      $("vSaved").checked = false; $("vCodeDone").disabled = true;
+      vaultMode("vCode");
+    } catch (err) { $("vErr").textContent = "Couldn't set up your vault. Check your connection and try again."; }
+    finally { $("vSetupBtn").disabled = false; $("vSetupBtn").textContent = "Lock my data"; }
+  });
+  $("vCopy").addEventListener("click", async () => { try { await navigator.clipboard.writeText($("vCodeText").textContent); toast("Recovery code copied"); } catch (_) { toast("Copy was blocked. Write it down instead."); } });
+  $("vSaved").addEventListener("change", () => { $("vCodeDone").disabled = !$("vSaved").checked; });
+  $("vCodeDone").addEventListener("click", () => { const k = st.pendingKey; st.pendingKey = null; if (k) vaultReady(k); });
+  $("vUnlock").addEventListener("submit", async e => {
+    e.preventDefault();
+    $("vUnlockBtn").disabled = true; $("vUnlockBtn").textContent = "Unlocking…";
+    try { vaultReady(await Vault.unlock(st.vault, $("vPass").value)); }
+    catch (_) { $("vErr").textContent = "That passphrase isn't right. Try again, or use your recovery code."; }
+    finally { $("vUnlockBtn").disabled = false; $("vUnlockBtn").textContent = "Unlock"; }
+  });
+  $("vForgot").addEventListener("click", () => vaultMode("vRecover"));
+  $("vBack").addEventListener("click", () => vaultMode("vUnlock"));
+  $("vRecover").addEventListener("submit", async e => {
+    e.preventDefault();
+    const np = $("vRecNew").value;
+    if (np.length < 8) { $("vErr").textContent = "Your new passphrase needs at least 8 characters."; return; }
+    $("vRecBtn").disabled = true; $("vRecBtn").textContent = "Checking…";
+    try {
+      const r = await Vault.recover(st.vault, $("vRecCode").value, np);
+      const { error } = await sb.from("vault").update({ pass: r.pass, updated_at: new Date().toISOString() }).eq("user_id", st.user.id);
+      if (error) throw error;
+      st.vault.pass = r.pass;
+      vaultReady(r.key); toast("Unlocked. Your new passphrase is set.");
+    } catch (err) { $("vErr").textContent = err && err.name === "OperationError" ? "That recovery code isn't right. Check each letter and try again." : "Couldn't save your new passphrase. Check your connection."; }
+    finally { $("vRecBtn").disabled = false; $("vRecBtn").textContent = "Unlock with recovery code"; }
+  });
+  $("openCp").addEventListener("click", () => { ["cpOld", "cpNew1", "cpNew2"].forEach(id => $(id).value = ""); $("cpErr").textContent = ""; $("cpOv").classList.add("open"); setTimeout(() => $("cpOld").focus(), 50); });
+  $("cpCancel").addEventListener("click", () => $("cpOv").classList.remove("open"));
+  $("cpOv").addEventListener("click", e => { if (e.target === $("cpOv")) $("cpOv").classList.remove("open"); });
+  $("cpForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const p = passProblem($("cpNew1").value, $("cpNew2").value);
+    if (p) { $("cpErr").textContent = p; return; }
+    $("cpSave").disabled = true; $("cpSave").textContent = "Changing…";
+    try {
+      const r = await Vault.changePass(st.vault, $("cpOld").value, $("cpNew1").value);
+      const { error } = await sb.from("vault").update({ pass: r.pass, updated_at: new Date().toISOString() }).eq("user_id", st.user.id);
+      if (error) throw error;
+      st.vault.pass = r.pass;
+      $("cpOv").classList.remove("open"); toast("Passphrase changed");
+    } catch (err) { $("cpErr").textContent = err && err.name === "OperationError" ? "Your current passphrase isn't right." : "Couldn't save. Check your connection."; }
+    finally { $("cpSave").disabled = false; $("cpSave").textContent = "Change it"; }
+  });
+  $("vSignOut").addEventListener("click", async () => { await Vault.forget(); await sb.auth.signOut(); });
+  async function decRows(rows, legacyMap) {
+    const out = [], legacy = [];
+    for (const r of rows) {
+      if (r.enc) { try { out.push({ ...(await Vault.dec(st.key, r.enc)), id: r.id, created_at: r.created_at }); } catch (_) { /* unreadable row: skip */ } }
+      else { const p = legacyMap(r); out.push(p); legacy.push(p); }
+    }
+    return { out, legacy };
+  }
 
   /* ---------- data ---------- */
   async function loadAll() {
     $("syncNote").textContent = "Loading your records…";
     render();
+    if (!st.key) return;
     const [tx, set, pl, hl, tk] = await Promise.all([
-      sb.from("transactions").select("*").order("date", { ascending: false }).order("created_at", { ascending: false }),
+      sb.from("transactions").select("*"),
       sb.from("settings").select("*").maybeSingle(),
-      sb.from("plans").select("*").order("created_at", { ascending: true }),
-      sb.from("fx_holdings").select("*").order("date", { ascending: false }),
-      sb.from("fx_tracker").select("*").order("date", { ascending: true }).order("created_at", { ascending: true })
+      sb.from("plans").select("*"),
+      sb.from("fx_holdings").select("*"),
+      sb.from("fx_tracker").select("*")
     ]);
     if (tx.error || set.error || pl.error || hl.error || tk.error) {
       $("syncNote").textContent = "Not synced";
@@ -109,14 +223,33 @@
       return;
     }
     banner("");
-    st.txs = tx.data.map(t => ({ ...t, amount: Number(t.amount) }));
-    st.track = tk.data.map(x => ({ ...x, amount: Number(x.amount) }));
-    st.holds = hl.data.map(x => ({ ...x, amount: Number(x.amount), cost_mur: Number(x.cost_mur) }));
-    st.plans = pl.data.map(x => ({ ...x, amount: Number(x.amount) }));
+    const T = await decRows(tx.data, r => ({ id: r.id, created_at: r.created_at, type: r.type, amount: Number(r.amount), category: r.category, note: r.note || "", date: r.date, receipt_path: r.receipt_path }));
+    const P = await decRows(pl.data, r => ({ id: r.id, created_at: r.created_at, title: r.title, amount: Number(r.amount), category: r.category, due_date: r.due_date, done: r.done, paid_tx_id: r.paid_tx_id, done_at: r.done_at, start_date: r.start_date, end_date: r.end_date, repeat: r.repeat }));
+    const H = await decRows(hl.data, r => ({ id: r.id, created_at: r.created_at, ccy: r.ccy, amount: Number(r.amount), cost_mur: Number(r.cost_mur), date: r.date, note: r.note || "" }));
+    const K = await decRows(tk.data, r => ({ id: r.id, created_at: r.created_at, ccy: r.ccy, amount: Number(r.amount), date: r.date, note: r.note || "" }));
+    st.txs = T.out;
+    st.plans = P.out.sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
+    st.holds = H.out.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    st.track = K.out.sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.created_at || "").localeCompare(b.created_at || ""));
+    let legacySettings = false;
     if (set.data) {
       st.hasSettingsRow = true;
-      st.settings = { currency: set.data.currency, expenseCats: set.data.expense_cats, incomeCats: set.data.income_cats, budgets: set.data.budgets || {},
-        name: set.data.display_name || "", theme: set.data.theme || "blush", avatar: set.data.avatar || "girl", skin: set.data.skin || "brown" };
+      let d;
+      if (set.data.enc) { try { d = await Vault.dec(st.key, set.data.enc); } catch (_) { d = null; } }
+      else { legacySettings = true; d = { currency: set.data.currency, expense_cats: set.data.expense_cats, income_cats: set.data.income_cats, budgets: set.data.budgets, display_name: set.data.display_name, theme: set.data.theme, avatar: set.data.avatar, skin: set.data.skin }; }
+      if (d) st.settings = { currency: d.currency || "Rs", expenseCats: d.expense_cats || clone(DEFAULTS.expenseCats), incomeCats: d.income_cats || clone(DEFAULTS.incomeCats), budgets: d.budgets || {},
+        name: d.display_name || "", theme: d.theme || "blush", avatar: d.avatar || "girl", skin: d.skin || "brown" };
+    }
+    // Move any older unencrypted rows into the encrypted format, once.
+    const toLock = [["transactions", T.legacy], ["plans", P.legacy], ["fx_holdings", H.legacy], ["fx_tracker", K.legacy]];
+    if (legacySettings || toLock.some(([, l]) => l.length)) {
+      (async () => {
+        try {
+          for (const [table, list] of toLock) for (const row of list) await putEnc(table, row);
+          if (legacySettings) await saveSettings();
+          toast("Your existing records are now encrypted");
+        } catch (_) {}
+      })();
     }
     applyLook();
     loadRates();
@@ -124,13 +257,11 @@
     render();
   }
   async function saveSettings() {
-    const row = { currency: st.settings.currency, expense_cats: st.settings.expenseCats, income_cats: st.settings.incomeCats, budgets: st.settings.budgets || {},
-      display_name: st.settings.name || "", theme: st.settings.theme, avatar: st.settings.avatar, skin: st.settings.skin, updated_at: new Date().toISOString() };
-    const { error } = await sb.from("settings").upsert({ user_id: st.user.id, ...row });
-    if (error) throw error;
+    await putEnc("settings", { currency: st.settings.currency, expense_cats: st.settings.expenseCats, income_cats: st.settings.incomeCats, budgets: st.settings.budgets || {},
+      display_name: st.settings.name || "", theme: st.settings.theme, avatar: st.settings.avatar, skin: st.settings.skin });
     st.hasSettingsRow = true;
   }
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && st.user) loadAll(); });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && st.user && st.key) loadAll(); });
 
   /* ---------- render ---------- */
   function monthTx(m) { return st.txs.filter(t => (t.date || "").startsWith(m)); }
@@ -563,9 +694,8 @@
     const row = { ccy: tk.ccy, amount: signed, date: $("trkDate").value, note: $("trkNote").value.trim().slice(0, 80) };
     $("trkSave").disabled = true;
     try {
-      const res = tk.id ? await sb.from("fx_tracker").update(row).eq("id", tk.id).select().single() : await sb.from("fx_tracker").insert(row).select().single();
-      if (res.error) throw res.error;
-      const saved = { ...res.data, amount: Number(res.data.amount) };
+      const saved = { ...(orig || {}), ...row, id: tk.id || uuid(), created_at: orig ? orig.created_at : new Date().toISOString() };
+      await putEnc("fx_tracker", saved);
       st.track = (tk.id ? st.track.map(x => x.id === tk.id ? saved : x) : [...st.track, saved]).sort((a, b) => a.date.localeCompare(b.date) || (a.created_at || "").localeCompare(b.created_at || ""));
       closeTrk(); render();
       const nb = trkBalances().find(b => b.ccy === saved.ccy);
@@ -651,9 +781,9 @@
     const row = { ccy: he.ccy, amount: Math.round(amt * 100) / 100, cost_mur: Math.round(cost * 100) / 100, date: $("hDate").value, note: $("hNote").value.trim().slice(0, 80) };
     $("hSave").disabled = true;
     try {
-      const res = he.id ? await sb.from("fx_holdings").update(row).eq("id", he.id).select().single() : await sb.from("fx_holdings").insert(row).select().single();
-      if (res.error) throw res.error;
-      const saved = { ...res.data, amount: Number(res.data.amount), cost_mur: Number(res.data.cost_mur) };
+      const prev = he.id ? st.holds.find(x => x.id === he.id) : null;
+      const saved = { ...row, id: he.id || uuid(), created_at: prev ? prev.created_at : new Date().toISOString() };
+      await putEnc("fx_holdings", saved);
       st.holds = (he.id ? st.holds.map(x => x.id === he.id ? saved : x) : [saved, ...st.holds]).sort((a, b) => b.date.localeCompare(a.date));
       closeHold(); render(); toast(he.id ? "Updated" : "Saved · " + fmtF(saved.amount, FX.find(f => f.ccy === saved.ccy)));
     } catch (err) { $("hErr").textContent = "Couldn't save. Try again."; }
@@ -836,9 +966,10 @@
   }
   async function setPlanDone(id, done, txId) {
     const patch = { done, paid_tx_id: done ? (txId || null) : null, done_at: done ? new Date().toISOString() : null };
-    const { error } = await sb.from("plans").update(patch).eq("id", id);
-    if (error) throw error;
-    st.plans = st.plans.map(x => x.id === id ? { ...x, ...patch } : x);
+    const cur = st.plans.find(x => x.id === id); if (!cur) return;
+    const next = { ...cur, ...patch };
+    await putEnc("plans", next);
+    st.plans = st.plans.map(x => x.id === id ? next : x);
   }
   $("planList").addEventListener("click", async e => {
     if (e.target.closest("#doneToggle")) { st.showDone = !st.showDone; render(); return; }
@@ -923,9 +1054,9 @@
       : { title, amount: Math.round(amt * 100) / 100, category: pe.category, due_date: $("pDue").value || null, start_date: null, end_date: null, repeat: "none" };
     $("pSave").disabled = true;
     try {
-      const res = pe.id ? await sb.from("plans").update(row).eq("id", pe.id).select().single() : await sb.from("plans").insert(row).select().single();
-      if (res.error) throw res.error;
-      const saved = { ...res.data, amount: Number(res.data.amount) };
+      const prev = pe.id ? st.plans.find(x => x.id === pe.id) : null;
+      const saved = prev ? { ...prev, ...row } : { ...row, id: uuid(), done: false, paid_tx_id: null, done_at: null, created_at: new Date().toISOString() };
+      await putEnc("plans", saved);
       st.plans = pe.id ? st.plans.map(x => x.id === pe.id ? saved : x) : [...st.plans, saved];
       const wasEdit = !!pe.id;
       closePlan(); render(); toast(wasEdit ? "Plan updated" : "Plan added · " + saved.title);
@@ -1044,17 +1175,16 @@
     try {
       let receipt_path = ed.receiptPath;
       if (ed.receiptBlob) {
-        const path = st.user.id + "/" + crypto.randomUUID() + ".jpg";
-        const up = await sb.storage.from("receipts").upload(path, ed.receiptBlob, { contentType: "image/jpeg" });
+        const path = st.user.id + "/" + uuid() + ".bin";
+        const sealed = await Vault.encBytes(st.key, await ed.receiptBlob.arrayBuffer());
+        const up = await sb.storage.from("receipts").upload(path, new Blob([sealed], { type: "application/octet-stream" }), { contentType: "application/octet-stream" });
         if (up.error) throw up.error;
         receipt_path = path;
       }
       const row = { type: ed.type, amount: Math.round(amt * 100) / 100, category: ed.category, note: $("fNote").value.trim().slice(0, 120), date: $("fDate").value, receipt_path };
-      const res = ed.id
-        ? await sb.from("transactions").update(row).eq("id", ed.id).select().single()
-        : await sb.from("transactions").insert(row).select().single();
-      if (res.error) throw res.error;
-      const saved = { ...res.data, amount: Number(res.data.amount) };
+      const prevTx = ed.id ? st.txs.find(t => t.id === ed.id) : null;
+      const saved = { ...row, id: ed.id || uuid(), created_at: prevTx ? prevTx.created_at : new Date().toISOString() };
+      await putEnc("transactions", saved);
       st.txs = ed.id ? st.txs.map(t => t.id === ed.id ? saved : t) : [saved, ...st.txs];
       const wasEdit = !!ed.id, planId = saved.type === "expense" ? ed.planId : null;
       const prevPlan = st.plans.find(x => x.paid_tx_id === saved.id);
@@ -1090,9 +1220,21 @@
     closeEntry(); render(); toast("Deleted");
   });
   $("viewRcpt").addEventListener("click", async () => {
-    const { data, error } = await sb.storage.from("receipts").createSignedUrl(ed.receiptPath, 300);
-    if (error) return toast("Couldn't open the receipt");
-    $("rcptFull").src = data.signedUrl; $("rcptOv").classList.add("open");
+    if (/\.bin$/.test(ed.receiptPath)) {
+      const { data, error } = await sb.storage.from("receipts").download(ed.receiptPath);
+      if (error) return toast("Couldn't open the receipt");
+      try {
+        const plain = await Vault.decBytes(st.key, await data.arrayBuffer());
+        if ($("rcptFull").dataset.url) URL.revokeObjectURL($("rcptFull").dataset.url);
+        const url = URL.createObjectURL(new Blob([plain], { type: "image/jpeg" }));
+        $("rcptFull").dataset.url = url; $("rcptFull").src = url;
+      } catch (_) { return toast("Couldn't unlock this receipt"); }
+    } else {
+      const { data, error } = await sb.storage.from("receipts").createSignedUrl(ed.receiptPath, 300);
+      if (error) return toast("Couldn't open the receipt");
+      $("rcptFull").src = data.signedUrl;
+    }
+    $("rcptOv").classList.add("open");
   });
   $("rcptClose").addEventListener("click", () => $("rcptOv").classList.remove("open"));
   $("rcptOv").addEventListener("click", e => { if (e.target === $("rcptOv")) $("rcptOv").classList.remove("open"); });
@@ -1192,7 +1334,7 @@
     if (changed) { try { await saveSettings(); } catch (e) { toast("Couldn't save your settings. Check your connection."); } }
   }
   $("setDone").addEventListener("click", closeSettings);
-  $("signOut").addEventListener("click", async () => { $("setOv").classList.remove("open"); await sb.auth.signOut(); });
+  $("signOut").addEventListener("click", async () => { $("setOv").classList.remove("open"); await Vault.forget(); await sb.auth.signOut(); });
   $("copyCsv").addEventListener("click", async () => {
     const rows = [["date","type","amount","category","note"]].concat([...st.txs].sort((a, b) => a.date.localeCompare(b.date)).map(t => [t.date, t.type, t.amount, t.category, t.note || ""]));
     const csv = rows.map(r => r.map(v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : v).join(",")).join("\n");
@@ -1207,7 +1349,7 @@
     document.querySelectorAll(".seg button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); render();
   });
   $("search").addEventListener("input", e => { st.q = e.target.value; render(); });
-  document.addEventListener("keydown", e => { if (e.key === "Escape") { if ($("trkOv").classList.contains("open")) closeTrk(); else if ($("addOv").classList.contains("open")) $("addOv").classList.remove("open"); else if ($("holdOv").classList.contains("open")) closeHold(); else if ($("budOv").classList.contains("open")) closeBudget(); else if ($("remOv").classList.contains("open")) $("remOv").classList.remove("open"); else if ($("planOv").classList.contains("open")) closePlan(); else if ($("rcptOv").classList.contains("open")) $("rcptOv").classList.remove("open"); else if ($("setOv").classList.contains("open")) closeSettings(); else if ($("entryOv").classList.contains("open")) closeEntry(); } });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") { if ($("cpOv").classList.contains("open")) $("cpOv").classList.remove("open"); else if ($("trkOv").classList.contains("open")) closeTrk(); else if ($("addOv").classList.contains("open")) $("addOv").classList.remove("open"); else if ($("holdOv").classList.contains("open")) closeHold(); else if ($("budOv").classList.contains("open")) closeBudget(); else if ($("remOv").classList.contains("open")) $("remOv").classList.remove("open"); else if ($("planOv").classList.contains("open")) closePlan(); else if ($("rcptOv").classList.contains("open")) $("rcptOv").classList.remove("open"); else if ($("setOv").classList.contains("open")) closeSettings(); else if ($("entryOv").classList.contains("open")) closeEntry(); } });
 
   render();
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});

@@ -36,6 +36,45 @@
   </form>
 </main>
 
+
+<main id="vaultView" class="auth vault">
+  <div class="vaultic" aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.5" r="1.5"/></svg></div>
+
+  <form class="card authcard hidden" id="vSetup" novalidate>
+    <div class="authhead"><h1 class="display">Lock your data</h1><p class="sub">Choose a passphrase. Your money records are encrypted on this phone before they're saved, so nobody else can read them, not even the app's owner.</p></div>
+    <div class="field"><label for="vNew1">Passphrase</label><input id="vNew1" type="password" autocomplete="new-password" placeholder="At least 8 characters"></div>
+    <div class="field"><label for="vNew2">Type it again</label><input id="vNew2" type="password" autocomplete="new-password"></div>
+    <p class="sub">Tip: a few random words, like <i>mango river purple chair</i>, is strong and easy to remember.</p>
+    <button class="btn primary" type="submit" id="vSetupBtn">Lock my data</button>
+  </form>
+
+  <div class="card authcard hidden" id="vCode">
+    <div class="authhead"><h1 class="display">Save your recovery code</h1><p class="sub">If you forget your passphrase, this code is the only way back into your records. Nobody can reset it for you.</p></div>
+    <div class="reccode num" id="vCodeText">—</div>
+    <button class="btn" type="button" id="vCopy">Copy code</button>
+    <label class="check"><input type="checkbox" id="vSaved"> I've written it down or saved it somewhere safe</label>
+    <button class="btn primary" type="button" id="vCodeDone" disabled>Continue</button>
+  </div>
+
+  <form class="card authcard hidden" id="vUnlock" novalidate>
+    <div class="authhead"><h1 class="display">Unlock your records</h1><p class="sub">Enter your passphrase. You only need to do this once on each phone.</p></div>
+    <div class="field"><label for="vPass">Passphrase</label><input id="vPass" type="password" autocomplete="current-password"></div>
+    <button class="btn primary" type="submit" id="vUnlockBtn">Unlock</button>
+    <button class="switch" type="button" id="vForgot">Forgot it? Use your recovery code</button>
+  </form>
+
+  <form class="card authcard hidden" id="vRecover" novalidate>
+    <div class="authhead"><h1 class="display">Use your recovery code</h1><p class="sub">Enter the code you saved, then choose a new passphrase.</p></div>
+    <div class="field"><label for="vRecCode">Recovery code</label><input id="vRecCode" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX"></div>
+    <div class="field"><label for="vRecNew">New passphrase</label><input id="vRecNew" type="password" autocomplete="new-password" placeholder="At least 8 characters"></div>
+    <button class="btn primary" type="submit" id="vRecBtn">Unlock with recovery code</button>
+    <button class="switch" type="button" id="vBack">Back</button>
+  </form>
+
+  <div class="err" id="vErr" role="alert" style="text-align:center"></div>
+  <button class="link" type="button" id="vSignOut">Log out</button>
+</main>
+
 <div class="app">
   <div class="banner" id="banner"></div>
 
@@ -231,6 +270,10 @@
     <div><div class="sub sublbl">Avatar</div><div class="avpick" id="sAvatar"></div></div>
     <div><div class="sub sublbl">Skin tone</div><div class="skinpick" id="sSkin"></div></div>
     <div class="field"><label for="sCur">Currency symbol</label><input id="sCur" maxlength="6"></div>
+    <div class="privacy">
+      <div><b>Encrypted</b><span class="sub">Your records are locked on your phone before they're saved. Only your passphrase or recovery code can open them.</span></div>
+      <button type="button" class="pillbtn" id="openCp">Change passphrase</button>
+    </div>
     <div><div class="sub" style="margin-bottom:6px">Expense categories</div><div class="catlist" id="sExp"></div></div>
     <div><div class="sub" style="margin-bottom:6px">Money-in categories</div><div class="catlist" id="sInc"></div></div>
     <div class="sub">Removing a category keeps past entries; they still show under their old name.</div>
@@ -354,6 +397,23 @@
   </form>
 </div>
 
+
+<!-- Change passphrase -->
+<div class="overlay" id="cpOv" role="dialog" aria-modal="true" aria-labelledby="cpTitle">
+  <form class="sheet" id="cpForm" novalidate>
+    <h2 id="cpTitle">Change passphrase</h2>
+    <div class="field"><label for="cpOld">Current passphrase</label><input id="cpOld" type="password" autocomplete="current-password"></div>
+    <div class="field"><label for="cpNew1">New passphrase</label><input id="cpNew1" type="password" autocomplete="new-password" placeholder="At least 8 characters"></div>
+    <div class="field"><label for="cpNew2">Type it again</label><input id="cpNew2" type="password" autocomplete="new-password"></div>
+    <div class="sub">Your recovery code stays the same.</div>
+    <div class="err" id="cpErr"></div>
+    <div class="actions"><div class="right">
+      <button type="button" class="btn ghost" id="cpCancel">Cancel</button>
+      <button type="submit" class="btn primary" id="cpSave">Change it</button>
+    </div></div>
+  </form>
+</div>
+
 <!-- Money-in reminder -->
 <div class="overlay" id="remOv" role="dialog" aria-modal="true" aria-labelledby="remTitle">
   <div class="sheet">
@@ -368,6 +428,7 @@
 
 <script src="supabase.js"></script>
 <script src="config.js"></script>
+<script src="vault.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

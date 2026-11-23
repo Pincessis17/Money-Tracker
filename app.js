@@ -1351,6 +1351,33 @@
   $("search").addEventListener("input", e => { st.q = e.target.value; render(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape") { if ($("cpOv").classList.contains("open")) $("cpOv").classList.remove("open"); else if ($("trkOv").classList.contains("open")) closeTrk(); else if ($("addOv").classList.contains("open")) $("addOv").classList.remove("open"); else if ($("holdOv").classList.contains("open")) closeHold(); else if ($("budOv").classList.contains("open")) closeBudget(); else if ($("remOv").classList.contains("open")) $("remOv").classList.remove("open"); else if ($("planOv").classList.contains("open")) closePlan(); else if ($("rcptOv").classList.contains("open")) $("rcptOv").classList.remove("open"); else if ($("setOv").classList.contains("open")) closeSettings(); else if ($("entryOv").classList.contains("open")) closeEntry(); } });
 
+  /* ---------- install tip ---------- */
+  (function installTip() {
+    const tip = $("installTip");
+    const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+    let hidden = false; try { hidden = localStorage.getItem("mm-install-hidden") === "1"; } catch (_) {}
+    if (standalone || hidden) return;
+    const ua = navigator.userAgent;
+    const ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const inApp = /FBAN|FBAV|Instagram|Line\/|WhatsApp|Snapchat|TikTok|GSA\//.test(ua);
+    const shareIcon = '<svg class="share" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Share"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
+    function place() {
+      const slot = document.body.classList.contains("signedout") ? $("installSlotAuth") : $("installSlotHome");
+      if (tip.parentNode !== slot) slot.appendChild(tip);
+    }
+    function show(html, withBtn) { $("installHow").innerHTML = html; $("installBtn").classList.toggle("hidden", !withBtn); tip.classList.remove("hidden"); place(); }
+    if (ios) {
+      show(inApp ? "Open this page in Safari first (tap ••• then Open in Safari), then tap " + shareIcon + " Share → Add to Home Screen."
+        : "In Safari, tap " + shareIcon + " Share at the bottom, scroll down, then tap <b>Add to Home Screen</b>.", false);
+    }
+    let deferred = null;
+    window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferred = e; show("Install it like an app, with its own icon.", true); });
+    $("installBtn").addEventListener("click", async () => { if (!deferred) return; deferred.prompt(); try { await deferred.userChoice; } catch (_) {} deferred = null; tip.classList.add("hidden"); });
+    $("installClose").addEventListener("click", () => { tip.classList.add("hidden"); try { localStorage.setItem("mm-install-hidden", "1"); } catch (_) {} });
+    window.addEventListener("appinstalled", () => tip.classList.add("hidden"));
+    new MutationObserver(place).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  })();
+
   render();
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 })();

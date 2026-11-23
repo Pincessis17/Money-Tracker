@@ -279,7 +279,7 @@ body:not(.signedout) #authView { display: none; }
 .authhead { text-align: center; display: grid; gap: 2px; }
 .authhead h1 { font-size: 28px; }
 .authhead p { margin: 0; }
-.auth .switch { background: none; border: 0; color: var(--accent-ink); font-weight: 600; padding: 4px 0; }
+.auth .switch { background: var(--surface); border: 1px solid var(--line); color: var(--accent-ink); font-weight: 600; padding: 12px 18px; border-radius: 999px; font-size: 15px; }
 
 /* period plans */
 .check { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500; min-height: 44px; }

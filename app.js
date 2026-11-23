@@ -45,6 +45,8 @@
     $("aErr").textContent = ""; $("aOk").textContent = "";
   }
   $("aSwitch").addEventListener("click", () => setAuthMode(!signUpMode));
+  // A phone that has never logged in starts on "Create your account".
+  try { if (!localStorage.getItem("mm-has-account")) setAuthMode(true); } catch (_) {}
   $("authForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const email = $("aEmail").value.trim(), password = $("aPass").value;
@@ -63,6 +65,7 @@
       } else {
         const { error } = await sb.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        try { localStorage.setItem("mm-has-account", "1"); } catch (_) {}
       }
     } catch (err) {
       const m = (err && err.message) || "";
@@ -78,7 +81,7 @@
     if ((u && u.id) === (st.user && st.user.id)) return;
     st.user = u;
     document.body.classList.toggle("signedout", !u);
-    if (u) { $("aPass").value = ""; loadAll(); } else { st.holds = []; st.txs = []; st.plans = []; st.settings = structuredClone(DEFAULTS); }
+    if (u) { $("aPass").value = ""; try { localStorage.setItem("mm-has-account", "1"); } catch (_) {} loadAll(); } else { st.holds = []; st.txs = []; st.plans = []; st.settings = structuredClone(DEFAULTS); }
   });
 
   /* ---------- data ---------- */

@@ -1,5 +1,6 @@
 (() => {
   const $ = (id) => document.getElementById(id);
+  const clone = (o) => (typeof structuredClone === "function" ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
   const sb = window.supabase.createClient(APP_CONFIG.supabaseUrl, APP_CONFIG.supabaseKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   });
@@ -14,7 +15,7 @@
   };
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-  const st = { holds: [], fx: [], fxTried: false, user: null, txs: [], plans: [], showDone: false, settings: structuredClone(DEFAULTS), hasSettingsRow: false, month: ym(new Date()), filter: "all", q: "" };
+  const st = { holds: [], fx: [], fxTried: false, user: null, txs: [], plans: [], showDone: false, settings: clone(DEFAULTS), hasSettingsRow: false, month: ym(new Date()), filter: "all", q: "" };
 
   function ym(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); }
   function today() { const d = new Date(); return ym(d) + "-" + String(d.getDate()).padStart(2, "0"); }
@@ -54,16 +55,19 @@
     if (!/^\S+@\S+\.\S+$/.test(email)) return ($("aErr").textContent = "Enter a valid email address.");
     if (password.length < 6) return ($("aErr").textContent = "Password needs at least 6 characters.");
     $("aSubmit").disabled = true;
+    const label = $("aSubmit").textContent;
+    $("aSubmit").textContent = signUpMode ? "Creating your account…" : "Logging in…";
+    const withTimeout = (p) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 20000))]);
     try {
       if (signUpMode) {
-        const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } });
+        const { data, error } = await withTimeout(sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } }));
         if (error) throw error;
         if (!data.session) {
           setAuthMode(false);
           $("aOk").textContent = "Account created. Check your email and tap the confirmation link, then come back here and log in.";
         }
       } else {
-        const { error } = await sb.auth.signInWithPassword({ email, password });
+        const { error } = await withTimeout(sb.auth.signInWithPassword({ email, password }));
         if (error) throw error;
         try { localStorage.setItem("mm-has-account", "1"); } catch (_) {}
       }
@@ -72,8 +76,12 @@
       $("aErr").textContent = /confirm/i.test(m) ? "Confirm your email first: open the link we sent you, then sign in." :
         /invalid login/i.test(m) ? "That email and password don't match." :
         /already registered/i.test(m) ? "That email already has an account. Sign in instead." :
-        /fetch|network/i.test(m) ? "No internet connection. Try again when you're online." : (m || "Something went wrong. Try again.");
-    } finally { $("aSubmit").disabled = false; }
+        /not authori[sz]ed/i.test(m) ? "Sign-ups for new people aren't switched on yet. Ask Princess to turn them on." :
+        /invalid/i.test(m) && /email/i.test(m) ? "That email address can't be used. Check it's a real address you can open." :
+        /rate limit|too many/i.test(m) ? "Too many attempts. Wait a few minutes and try again." :
+        m === "timeout" ? "That took too long. Check your internet connection and try again." :
+        /fetch|network|load failed/i.test(m) ? "No internet connection. Try again when you're online." : (m || "Something went wrong. Try again.");
+    } finally { $("aSubmit").disabled = false; $("aSubmit").textContent = label; }
   });
 
   sb.auth.onAuthStateChange((_evt, session) => {
@@ -81,7 +89,7 @@
     if ((u && u.id) === (st.user && st.user.id)) return;
     st.user = u;
     document.body.classList.toggle("signedout", !u);
-    if (u) { $("aPass").value = ""; try { localStorage.setItem("mm-has-account", "1"); } catch (_) {} loadAll(); } else { st.holds = []; st.txs = []; st.plans = []; st.settings = structuredClone(DEFAULTS); }
+    if (u) { $("aPass").value = ""; try { localStorage.setItem("mm-has-account", "1"); } catch (_) {} loadAll(); } else { st.holds = []; st.txs = []; st.plans = []; st.settings = clone(DEFAULTS); }
   });
 
   /* ---------- data ---------- */

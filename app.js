@@ -1410,5 +1410,10 @@
   })();
 
   render();
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(r => { r.update().catch(() => {}); }).catch(() => {});
+    // When a newer version takes over, reload once so the new screens appear.
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => { if (reloaded) return; reloaded = true; if (!document.querySelector(".overlay.open")) location.reload(); });
+  }
 })();

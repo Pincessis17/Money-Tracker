@@ -15,7 +15,7 @@
   };
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-  const st = { track: [], holds: [], fx: [], fxTried: false, user: null, txs: [], plans: [], showDone: false, settings: clone(DEFAULTS), hasSettingsRow: false, month: ym(new Date()), filter: "all", q: "" };
+  const st = { lists: [], track: [], holds: [], fx: [], fxTried: false, user: null, txs: [], plans: [], showDone: false, settings: clone(DEFAULTS), hasSettingsRow: false, month: ym(new Date()), filter: "all", q: "" };
 
   function ym(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); }
   function today() { const d = new Date(); return ym(d) + "-" + String(d.getDate()).padStart(2, "0"); }
@@ -90,7 +90,7 @@
     st.user = u;
     document.body.classList.toggle("signedout", !u);
     if (u) { $("aPass").value = ""; try { localStorage.setItem("mm-has-account", "1"); } catch (_) {} startVault(); }
-    else { st.key = null; st.vault = null; document.body.classList.remove("locked"); st.track = []; st.holds = []; st.txs = []; st.plans = []; st.settings = clone(DEFAULTS); }
+    else { st.key = null; st.vault = null; st.lists = []; document.body.classList.remove("locked"); st.track = []; st.holds = []; st.txs = []; st.plans = []; st.settings = clone(DEFAULTS); }
   });
 
   /* ---------- private vault (end-to-end encryption) ---------- */
@@ -99,6 +99,7 @@
     plans: { title: null, amount: null, category: "-", due_date: null, done: false, paid_tx_id: null, done_at: null, start_date: null, end_date: null, repeat: "none" },
     fx_holdings: { ccy: null, amount: null, cost_mur: null, date: null, note: "" },
     fx_tracker: { ccy: null, amount: null, date: null, note: "" },
+    lists: {},
     settings: { currency: "-", expense_cats: null, income_cats: null, budgets: {}, display_name: "", theme: "blush", avatar: "girl", skin: "brown" }
   };
   const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)));
@@ -210,14 +211,15 @@
     $("syncNote").textContent = "Loading your records…";
     render();
     if (!st.key) return;
-    const [tx, set, pl, hl, tk] = await Promise.all([
+    const [tx, set, pl, hl, tk, ls] = await Promise.all([
       sb.from("transactions").select("*"),
       sb.from("settings").select("*").maybeSingle(),
       sb.from("plans").select("*"),
       sb.from("fx_holdings").select("*"),
-      sb.from("fx_tracker").select("*")
+      sb.from("fx_tracker").select("*"),
+      sb.from("lists").select("*")
     ]);
-    if (tx.error || set.error || pl.error || hl.error || tk.error) {
+    if (tx.error || set.error || pl.error || hl.error || tk.error || ls.error) {
       $("syncNote").textContent = "Not synced";
       banner("Couldn't load your records. Check your connection and pull down or reopen the app.");
       return;
@@ -230,6 +232,7 @@
     st.txs = T.out;
     st.plans = P.out.sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
     st.holds = H.out.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    st.lists = (await decRows(ls.data, r => r)).out.filter(x => x.items).sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
     st.track = K.out.sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.created_at || "").localeCompare(b.created_at || ""));
     let legacySettings = false;
     if (set.data) {
@@ -337,6 +340,7 @@
     renderHomeBudgets();
     renderRecent();
     renderPlans(net);
+    renderLists();
     renderBudgets(cur);
     renderFx(net);
     renderCats(cur, s.o);
@@ -884,6 +888,186 @@
   $("fAmt").addEventListener("input", updateBudgetHint);
   $("fDate").addEventListener("change", updateBudgetHint);
 
+
+  /* ---------- shopping lists ---------- */
+  function listStats(l) {
+    const planned = l.items.reduce((a, i) => a + (i.price || 0), 0);
+    const spent = l.items.filter(i => i.done).reduce((a, i) => a + (i.paid != null ? i.paid : (i.price || 0)), 0);
+    const left = l.items.filter(i => !i.done).reduce((a, i) => a + (i.price || 0), 0);
+    const bought = l.items.filter(i => i.done).length;
+    return { planned, spent, left, bought, total: l.items.length };
+  }
+  // What this list still holds back from "Free to spend".
+  function listLeft(l) {
+    const s = listStats(l);
+    if (!s.total || s.bought === s.total) return 0;
+    return l.budget > 0 ? Math.max(0, l.budget - s.spent) : s.left;
+  }
+  function parseItems(text) {
+    return String(text || "").split(/[\n,;]+/).map(x => x.trim()).filter(Boolean).map(part => {
+      const m = part.match(/^(.*?)[\s:=-]*(?:rs\.?|mur|€|\$|£)?\s*(\d+(?:[.,]\d{1,2})?)\s*(?:rs|mur)?\.?$/i);
+      let name = part, price = null;
+      if (m && m[1].trim()) { name = m[1].trim(); price = Number(m[2].replace(",", ".")); }
+      return { id: uuid(), name: name.slice(0, 60), price: price > 0 ? Math.round(price * 100) / 100 : null, done: false, paid: null, txId: null };
+    });
+  }
+  async function saveList(l) { await putEnc("lists", l); st.lists = st.lists.some(x => x.id === l.id) ? st.lists.map(x => x.id === l.id ? l : x) : [...st.lists, l]; }
+  function renderLists() {
+    if (!st.lists.length) { $("listsWrap").innerHTML = '<div class="empty">Write what you need to buy with a price beside each, like <i>rice 400, oil 250</i>. Tick items off as you buy them.</div>'; return; }
+    $("listsWrap").innerHTML = st.lists.map(l => {
+      const s = listStats(l), cap = l.budget > 0 ? l.budget : s.planned;
+      const pct = cap > 0 ? Math.min(100, s.spent / cap * 100) : 0, over = l.budget > 0 && s.spent > l.budget;
+      const col = over ? "var(--bad)" : pct >= 80 ? "var(--warn)" : "var(--good)";
+      const head = '<div class="lsthead"><button type="button" class="lstname" data-ledit="' + esc(l.id) + '"><b>' + esc(l.name) + '</b><span class="sub">' + esc(l.category) + ' · ' + s.bought + ' of ' + s.total + ' bought</span></button>' +
+        '<span class="lsttot num">' + esc(money(s.spent)) + '<small>' + (l.budget > 0 ? (over ? '<span class="bad">over by ' + esc(money(s.spent - l.budget)) + '</span>' : 'of ' + esc(money(l.budget)) + ' budget') : 'of ' + esc(money(s.planned)) + ' planned') + '</small></span></div>';
+      const warn = l.budget > 0 && s.planned > l.budget ? '<span class="sub bad">Your items add up to ' + esc(money(s.planned)) + ', more than this list\'s budget.</span>' : "";
+      const items = [...l.items].sort((a, b) => (a.done === b.done ? 0 : a.done ? 1 : -1)).map(i =>
+        '<div class="li' + (i.done ? " done" : "") + '"><button type="button" class="tick" data-itick="' + esc(l.id) + '|' + esc(i.id) + '" aria-label="' + (i.done ? "Untick " : "Tick ") + esc(i.name) + '" aria-pressed="' + i.done + '">✓</button>' +
+        '<button type="button" class="lin" data-iedit="' + esc(l.id) + '|' + esc(i.id) + '">' + esc(i.name) + '</button>' +
+        '<span class="lip num">' + (i.done && i.paid != null ? esc(money(i.paid)) : i.price ? esc(money(i.price)) : '<span class="sub">no price</span>') + '</span></div>').join("");
+      return '<div class="lst">' + head + (cap > 0 ? '<div class="bar"><i style="width:' + Math.max(s.spent > 0 ? 2 : 0, pct) + '%;background:' + col + '"></i></div>' : "") + warn +
+        '<div>' + items + '</div>' +
+        '<form class="liadd" data-ladd="' + esc(l.id) + '"><input class="search" placeholder="Add: bread 45, milk 60" aria-label="Add items to ' + esc(l.name) + '"><button type="submit" class="btn">Add</button></form>' +
+        (s.total && s.bought === s.total ? '<button type="button" class="lstmore" data-ldone="' + esc(l.id) + '">All bought. Remove this list</button>' : "") + '</div>';
+    }).join("");
+  }
+  async function deleteTx(id) {
+    const t = st.txs.find(x => x.id === id);
+    await sb.from("transactions").delete().eq("id", id);
+    if (t && t.receipt_path) sb.storage.from("receipts").remove([t.receipt_path]);
+    st.txs = st.txs.filter(x => x.id !== id);
+  }
+  async function tickItem(l, i) {
+    const before = JSON.parse(JSON.stringify(l));
+    try {
+      if (!i.done) {
+        i.done = true; i.paid = i.price;
+        if (l.log && i.price > 0) {
+          const t = { id: uuid(), type: "expense", amount: i.price, category: l.category, note: (i.name + " · " + l.name).slice(0, 120), date: today(), receipt_path: null, created_at: new Date().toISOString() };
+          await putEnc("transactions", t); st.txs = [t, ...st.txs]; i.txId = t.id;
+        }
+        await saveList(l); render();
+        toast(i.txId ? "Bought · " + money(i.price) + " added to " + l.category + ". Tap the item to change the price." : "Ticked · " + i.name);
+      } else {
+        if (i.txId) await deleteTx(i.txId);
+        i.done = false; i.paid = null; i.txId = null;
+        await saveList(l); render(); toast("Unticked · " + i.name);
+      }
+    } catch (_) {
+      st.lists = st.lists.map(x => x.id === before.id ? before : x); render();
+      toast("Couldn't update. Check your connection.");
+    }
+  }
+  $("listsWrap").addEventListener("click", async e => {
+    const t = e.target.closest("[data-itick]");
+    if (t) { const [lid, iid] = t.dataset.itick.split("|"); const l = st.lists.find(x => x.id === lid); const i = l && l.items.find(x => x.id === iid); if (i) tickItem(l, i); return; }
+    const ie = e.target.closest("[data-iedit]");
+    if (ie) { const [lid, iid] = ie.dataset.iedit.split("|"); openItem(lid, iid); return; }
+    const le = e.target.closest("[data-ledit]"); if (le) { openList(st.lists.find(x => x.id === le.dataset.ledit)); return; }
+    const ld = e.target.closest("[data-ldone]");
+    if (ld) { const l = st.lists.find(x => x.id === ld.dataset.ldone); if (!l) return; const { error } = await sb.from("lists").delete().eq("id", l.id); if (error) return toast("Couldn't remove. Try again."); st.lists = st.lists.filter(x => x.id !== l.id); render(); toast("List removed. Its expenses stay in your journal."); }
+  });
+  $("listsWrap").addEventListener("submit", async e => {
+    const f = e.target.closest("[data-ladd]"); if (!f) return;
+    e.preventDefault();
+    const inp = f.querySelector("input"), add = parseItems(inp.value); if (!add.length) return inp.focus();
+    const l = st.lists.find(x => x.id === f.dataset.ladd); if (!l) return;
+    const next = { ...l, items: [...l.items, ...add] };
+    try { await saveList(next); render(); toast(add.length === 1 ? "Added " + add[0].name : "Added " + add.length + " items"); const again = document.querySelector('[data-ladd="' + l.id + '"] input'); if (again) again.focus(); }
+    catch (_) { toast("Couldn't add. Check your connection."); }
+  });
+
+  const le = { id: null, category: null };
+  function renderListChips() {
+    const list = st.settings.expenseCats, all = le.category && !list.includes(le.category) ? [...list, le.category] : list;
+    $("lChips").innerHTML = all.map(c => '<button type="button" class="chip" data-c="' + esc(c) + '" aria-pressed="' + (c === le.category) + '"><span class="dot" style="background:' + catColor(c, "expense") + '"></span>' + esc(c) + '</button>').join("") + '<button type="button" class="chip add" data-new="1">+ New</button>';
+  }
+  function listHint() {
+    const items = parseItems($("lItems").value), tot = items.reduce((a, i) => a + (i.price || 0), 0);
+    const bud = parseFloat(String($("lBudget").value).replace(/[^0-9.]/g, "")) || 0;
+    $("lHint").textContent = items.length ? items.length + (items.length === 1 ? " item" : " items") + " · " + money(tot) + (bud > 0 ? (tot > bud ? " · " + money(tot - bud) + " over budget" : " · " + money(bud - tot) + " spare") : "") : "";
+  }
+  function openList(l) {
+    le.id = l ? l.id : null; le.category = l ? l.category : (st.settings.expenseCats.includes("Groceries") ? "Groceries" : null);
+    $("lstTitle").textContent = l ? "Edit list" : "New shopping list";
+    $("lName").value = l ? l.name : ""; $("lBudget").value = l && l.budget ? String(l.budget) : ""; $("lItems").value = "";
+    $("lItemsField").querySelector("label").textContent = l ? "Add more items (optional)" : "What to buy";
+    $("lLog").checked = l ? l.log !== false : true;
+    $("lErr").textContent = ""; $("lHint").textContent = ""; $("lDel").classList.toggle("hidden", !l);
+    $("lNewRow").classList.add("hidden"); $("lNewCat").value = "";
+    renderListChips(); $("lstOv").classList.add("open");
+    if (!l) setTimeout(() => $("lName").focus(), 50);
+  }
+  function closeList() { $("lstOv").classList.remove("open"); }
+  $("addList").addEventListener("click", () => openList(null));
+  $("lCancel").addEventListener("click", closeList);
+  $("lstOv").addEventListener("click", e => { if (e.target === $("lstOv")) closeList(); });
+  $("lChips").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.new) { $("lNewRow").classList.remove("hidden"); $("lNewCat").focus(); return; }
+    le.category = b.dataset.c; $("lErr").textContent = ""; renderListChips();
+  });
+  wireNewCat("l", name => { le.category = name; $("lErr").textContent = ""; renderListChips(); });
+  $("lItems").addEventListener("input", listHint); $("lBudget").addEventListener("input", listHint);
+  $("lstForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const name = $("lName").value.trim().slice(0, 60) || "Shopping list";
+    const bud = parseFloat(String($("lBudget").value).replace(/[^0-9.]/g, "")) || 0;
+    if (!le.category) { $("lErr").textContent = "Choose a category, or tap + New to make one."; return; }
+    const prev = le.id ? st.lists.find(x => x.id === le.id) : null;
+    const add = parseItems($("lItems").value);
+    if (!prev && !add.length) { $("lErr").textContent = "Add at least one thing to buy."; $("lItems").focus(); return; }
+    const l = { ...(prev || { id: uuid(), items: [], created_at: new Date().toISOString() }), name, budget: bud > 0 ? Math.round(bud * 100) / 100 : null, category: le.category, log: $("lLog").checked };
+    l.items = [...(prev ? prev.items : []), ...add];
+    $("lSave").disabled = true;
+    try { await saveList(l); closeList(); render(); toast(prev ? "List updated" : "List saved · " + l.items.length + (l.items.length === 1 ? " item" : " items")); }
+    catch (_) { $("lErr").textContent = "Couldn't save. Check your connection."; }
+    finally { $("lSave").disabled = false; }
+  });
+  $("lDel").addEventListener("click", async () => {
+    if ($("lDel").dataset.confirm !== "1") { $("lDel").dataset.confirm = "1"; $("lDel").textContent = "Tap again to delete"; setTimeout(() => { $("lDel").dataset.confirm = ""; $("lDel").textContent = "Delete list"; }, 3000); return; }
+    $("lDel").dataset.confirm = ""; $("lDel").textContent = "Delete list";
+    const { error } = await sb.from("lists").delete().eq("id", le.id);
+    if (error) { $("lErr").textContent = "Couldn't delete. Try again."; return; }
+    st.lists = st.lists.filter(x => x.id !== le.id); closeList(); render(); toast("List deleted. Expenses you ticked stay in your journal.");
+  });
+
+  const ie = { lid: null, iid: null };
+  function openItem(lid, iid) {
+    const l = st.lists.find(x => x.id === lid), i = l && l.items.find(x => x.id === iid); if (!i) return;
+    ie.lid = lid; ie.iid = iid;
+    $("iName").value = i.name; $("iPrice").value = i.price != null ? String(i.price) : ""; $("iPaid").value = i.paid != null ? String(i.paid) : "";
+    $("iPaidField").classList.toggle("hidden", !i.done); $("iErr").textContent = "";
+    $("itmOv").classList.add("open");
+  }
+  function closeItem() { $("itmOv").classList.remove("open"); }
+  $("iCancel").addEventListener("click", closeItem);
+  $("itmOv").addEventListener("click", e => { if (e.target === $("itmOv")) closeItem(); });
+  $("itmForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const l = st.lists.find(x => x.id === ie.lid), i = l && l.items.find(x => x.id === ie.iid); if (!i) return closeItem();
+    const name = $("iName").value.trim().slice(0, 60);
+    if (!name) { $("iErr").textContent = "Give the item a name."; return; }
+    const price = parseFloat(String($("iPrice").value).replace(/[^0-9.]/g, "")), paid = parseFloat(String($("iPaid").value).replace(/[^0-9.]/g, ""));
+    const ni = { ...i, name, price: price > 0 ? Math.round(price * 100) / 100 : null };
+    if (i.done) ni.paid = paid > 0 ? Math.round(paid * 100) / 100 : ni.price;
+    $("iSave").disabled = true;
+    try {
+      if (i.done && i.txId) {
+        const t = st.txs.find(x => x.id === i.txId);
+        if (t) { const nt = { ...t, amount: ni.paid || t.amount, note: (name + " · " + l.name).slice(0, 120) }; await putEnc("transactions", nt); st.txs = st.txs.map(x => x.id === nt.id ? nt : x); }
+      }
+      await saveList({ ...l, items: l.items.map(x => x.id === i.id ? ni : x) });
+      closeItem(); render(); toast("Item updated");
+    } catch (_) { $("iErr").textContent = "Couldn't save. Check your connection."; }
+    finally { $("iSave").disabled = false; }
+  });
+  $("iDel").addEventListener("click", async () => {
+    const l = st.lists.find(x => x.id === ie.lid), i = l && l.items.find(x => x.id === ie.iid); if (!i) return closeItem();
+    try { await saveList({ ...l, items: l.items.filter(x => x.id !== i.id) }); closeItem(); render(); toast("Removed " + i.name + (i.txId ? ". Its expense stays in your journal." : "")); }
+    catch (_) { $("iErr").textContent = "Couldn't remove. Try again."; }
+  });
+
   /* ---------- plans ---------- */
   function dayDiff(a, b) { return Math.round((new Date(b + "T12:00:00") - new Date(a + "T12:00:00")) / 864e5); }
   function isPeriod(x) { return !!(x.start_date && x.end_date); }
@@ -906,7 +1090,7 @@
     const w = planWindow(x);
     return w.status === "ended" ? 0 : Math.max(0, x.amount - planSpent(x, w));
   }
-  function plannedTotal() { return openPlans().reduce((a, x) => a + planLeft(x), 0); }
+  function plannedTotal() { return openPlans().reduce((a, x) => a + planLeft(x), 0) + st.lists.reduce((a, l) => a + listLeft(l), 0); }
   function rangeLabel(a, b) {
     const da = new Date(a + "T12:00:00"), db = new Date(b + "T12:00:00");
     const f = d => d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric" });
@@ -956,9 +1140,9 @@
       $("planList").innerHTML = '<div class="empty">Nothing planned yet. Add what your next money is for, like rent or a gift, or set a spending limit for some days, like bus fare from Monday to Friday.</div>';
       return;
     }
-    const free = net - planned;
+    const free = net - plannedTotal();
     $("planSum").innerHTML = open.length ? '<div class="plansum"><span>' + open.length + (open.length === 1 ? " plan" : " plans") + ' · <b class="num">' + esc(money(planned)) + '</b> set aside</span>' +
-      '<span class="free">Left over this month after plans: <b class="num" style="color:' + (free < 0 ? "var(--expense)" : "var(--income)") + '">' + (free < 0 ? "−" : "") + esc(money(Math.abs(free))) + '</b></span></div>' :
+      '<span class="free">Left over this month after plans and lists: <b class="num" style="color:' + (free < 0 ? "var(--expense)" : "var(--income)") + '">' + (free < 0 ? "−" : "") + esc(money(Math.abs(free))) + '</b></span></div>' :
       '<div class="plansum"><span>All plans finished.</span></div>';
     let html = open.map(x => planRow(x, true)).join("");
     if (done.length) {
@@ -1380,7 +1564,7 @@
     document.querySelectorAll(".seg button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); render();
   });
   $("search").addEventListener("input", e => { st.q = e.target.value; render(); });
-  document.addEventListener("keydown", e => { if (e.key === "Escape") { if ($("cpOv").classList.contains("open")) $("cpOv").classList.remove("open"); else if ($("trkOv").classList.contains("open")) closeTrk(); else if ($("addOv").classList.contains("open")) $("addOv").classList.remove("open"); else if ($("holdOv").classList.contains("open")) closeHold(); else if ($("budOv").classList.contains("open")) closeBudget(); else if ($("remOv").classList.contains("open")) $("remOv").classList.remove("open"); else if ($("planOv").classList.contains("open")) closePlan(); else if ($("rcptOv").classList.contains("open")) $("rcptOv").classList.remove("open"); else if ($("setOv").classList.contains("open")) closeSettings(); else if ($("entryOv").classList.contains("open")) closeEntry(); } });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") { if ($("itmOv").classList.contains("open")) closeItem(); else if ($("lstOv").classList.contains("open")) closeList(); else if ($("cpOv").classList.contains("open")) $("cpOv").classList.remove("open"); else if ($("trkOv").classList.contains("open")) closeTrk(); else if ($("addOv").classList.contains("open")) $("addOv").classList.remove("open"); else if ($("holdOv").classList.contains("open")) closeHold(); else if ($("budOv").classList.contains("open")) closeBudget(); else if ($("remOv").classList.contains("open")) $("remOv").classList.remove("open"); else if ($("planOv").classList.contains("open")) closePlan(); else if ($("rcptOv").classList.contains("open")) $("rcptOv").classList.remove("open"); else if ($("setOv").classList.contains("open")) closeSettings(); else if ($("entryOv").classList.contains("open")) closeEntry(); } });
 
   /* ---------- install tip ---------- */
   (function installTip() {

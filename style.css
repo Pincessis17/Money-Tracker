@@ -341,3 +341,25 @@ body:not(.locked) #vaultView, body.signedout #vaultView { display: none; }
 
 .newcat { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 .newcat .btn { padding: 8px 16px; }
+
+/* shopping lists */
+.lst { padding: 12px 0 14px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
+.lst:first-child { padding-top: 0; }
+.lst:last-child { border-bottom: 0; padding-bottom: 0; }
+.lsthead { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.lstname { border: 0; background: none; padding: 0; text-align: left; display: grid; gap: 1px; min-width: 0; }
+.lstname b { font-size: 16px; font-weight: 600; }
+.lsttot { text-align: right; font-size: 15px; font-weight: 600; white-space: nowrap; }
+.lsttot small { display: block; font-size: 12px; font-weight: 500; color: var(--muted); }
+.li { display: grid; grid-template-columns: 32px 1fr auto; gap: 10px; align-items: center; min-height: 44px; }
+.li .tick { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--line); background: var(--surface); display: grid; place-items: center; padding: 0; color: transparent; font-size: 14px; }
+.li .tick:hover { border-color: var(--good); color: var(--good); }
+.li.done .tick { background: var(--good); border-color: var(--good); color: #fff; }
+.li .lin { border: 0; background: none; padding: 0; text-align: left; font-size: 15px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.li.done .lin { text-decoration: line-through; color: var(--muted); }
+.li .lip { font-size: 14px; font-weight: 600; }
+.li.done .lip { color: var(--muted); font-weight: 500; }
+.liadd { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 2px; }
+.liadd .btn { padding: 8px 16px; }
+.lstmore { border: 0; background: none; color: var(--accent-ink); font-size: 13px; font-weight: 600; padding: 4px 0; justify-self: start; }
+textarea { font: inherit; color: inherit; border: 1px solid var(--line); background: var(--tile); border-radius: 14px; padding: 11px 14px; font-size: 16px; width: 100%; resize: vertical; }

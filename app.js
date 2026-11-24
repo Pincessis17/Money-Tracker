@@ -925,23 +925,38 @@
     });
   }
   async function saveList(l) { await putEnc("lists", l); st.lists = st.lists.some(x => x.id === l.id) ? st.lists.map(x => x.id === l.id ? l : x) : [...st.lists, l]; }
+  const PEN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13 7 4 4"/></svg>';
+  const BIN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>';
+  async function killList(id) {
+    const { error } = await sb.from("lists").delete().eq("id", id);
+    if (error) throw error;
+    st.lists = st.lists.filter(x => x.id !== id);
+  }
+  function confirmTap(btn, msg) {
+    if (btn.dataset.confirm === "1") { btn.dataset.confirm = ""; return true; }
+    btn.dataset.confirm = "1"; btn.classList.add("arm"); toast(msg);
+    setTimeout(() => { btn.dataset.confirm = ""; btn.classList.remove("arm"); }, 3000);
+    return false;
+  }
   function renderLists() {
-    if (!st.lists.length) { $("listsWrap").innerHTML = '<div class="empty">Write what you need to buy with a price beside each, like <i>rice 400, oil 250</i>. Tick items off as you buy them.</div>'; return; }
+    if (!st.lists.length) { $("listsWrap").innerHTML = '<div class="empty">Make a checklist of things to buy or do, like <i>rice, oil, soap</i>. Prices and a budget are optional. Tick items off as you go.</div>'; return; }
     $("listsWrap").innerHTML = st.lists.map(l => {
       const s = listStats(l), cap = l.budget > 0 ? l.budget : s.planned;
       const pct = cap > 0 ? Math.min(100, s.spent / cap * 100) : 0, over = l.budget > 0 && s.spent > l.budget;
       const col = over ? "var(--bad)" : pct >= 80 ? "var(--warn)" : "var(--good)";
-      const head = '<div class="lsthead"><button type="button" class="lstname" data-ledit="' + esc(l.id) + '"><b>' + esc(l.name) + '</b><span class="sub">' + esc(l.category) + ' · ' + s.bought + ' of ' + s.total + ' bought</span></button>' +
-        '<span class="lsttot num">' + esc(money(s.spent)) + '<small>' + (l.budget > 0 ? (over ? '<span class="bad">over by ' + esc(money(s.spent - l.budget)) + '</span>' : 'of ' + esc(money(l.budget)) + ' budget') : 'of ' + esc(money(s.planned)) + ' planned') + '</small></span></div>';
+      const head = '<div class="lsthead"><button type="button" class="lstname" data-ledit="' + esc(l.id) + '"><b>' + esc(l.name) + '</b><span class="sub">' + (l.category ? esc(l.category) + ' · ' : "") + (s.total ? s.bought + ' of ' + s.total + ' done' : 'No items yet') + '</span></button>' +
+        (cap > 0 ? '<span class="lsttot num">' + esc(money(s.spent)) + '<small>' + (l.budget > 0 ? (over ? '<span class="bad">over by ' + esc(money(s.spent - l.budget)) + '</span>' : 'of ' + esc(money(l.budget)) + ' budget') : 'of ' + esc(money(s.planned)) + ' planned') + '</small></span>' : "") +
+        '<span class="lacts"><button type="button" class="iconb" data-ledit="' + esc(l.id) + '" aria-label="Edit list ' + esc(l.name) + '">' + PEN + '</button><button type="button" class="iconb" data-lkill="' + esc(l.id) + '" aria-label="Delete list ' + esc(l.name) + '">' + BIN + '</button></span></div>';
       const warn = l.budget > 0 && s.planned > l.budget ? '<span class="sub bad">Your items add up to ' + esc(money(s.planned)) + ', more than this list\'s budget.</span>' : "";
       const items = [...l.items].sort((a, b) => (a.done === b.done ? 0 : a.done ? 1 : -1)).map(i =>
         '<div class="li' + (i.done ? " done" : "") + '"><button type="button" class="tick" data-itick="' + esc(l.id) + '|' + esc(i.id) + '" aria-label="' + (i.done ? "Untick " : "Tick ") + esc(i.name) + '" aria-pressed="' + i.done + '">✓</button>' +
         '<button type="button" class="lin" data-iedit="' + esc(l.id) + '|' + esc(i.id) + '">' + esc(i.name) + '</button>' +
-        '<span class="lip num">' + (i.done && i.paid != null ? esc(money(i.paid)) : i.price ? esc(money(i.price)) : '<span class="sub">no price</span>') + '</span></div>').join("");
+        '<span class="lip num">' + (i.done && i.paid != null ? esc(money(i.paid)) : i.price ? esc(money(i.price)) : "") + '</span>' +
+        '<span class="lacts"><button type="button" class="iconb" data-iedit="' + esc(l.id) + '|' + esc(i.id) + '" aria-label="Edit ' + esc(i.name) + '">' + PEN + '</button><button type="button" class="iconb" data-ikill="' + esc(l.id) + '|' + esc(i.id) + '" aria-label="Delete ' + esc(i.name) + '">' + BIN + '</button></span></div>').join("");
       return '<div class="lst">' + head + (cap > 0 ? '<div class="bar"><i style="width:' + Math.max(s.spent > 0 ? 2 : 0, pct) + '%;background:' + col + '"></i></div>' : "") + warn +
         '<div>' + items + '</div>' +
-        '<form class="liadd" data-ladd="' + esc(l.id) + '"><input class="search" placeholder="Add: bread 45, milk 60" aria-label="Add items to ' + esc(l.name) + '"><button type="submit" class="btn">Add</button></form>' +
-        (s.total && s.bought === s.total ? '<button type="button" class="lstmore" data-ldone="' + esc(l.id) + '">All bought. Remove this list</button>' : "") + '</div>';
+        '<form class="liadd" data-ladd="' + esc(l.id) + '"><input class="search" placeholder="Add an item" aria-label="Add items to ' + esc(l.name) + '"><button type="submit" class="btn">Add</button></form>' +
+        (s.total && s.bought === s.total ? '<button type="button" class="lstmore" data-ldone="' + esc(l.id) + '">All done. Remove this list</button>' : "") + '</div>';
     }).join("");
   }
   async function deleteTx(id) {
@@ -956,11 +971,11 @@
       if (!i.done) {
         i.done = true; i.paid = i.price;
         if (l.log && i.price > 0) {
-          const t = { id: uuid(), type: "expense", amount: i.price, category: l.category, note: (i.name + " · " + l.name).slice(0, 120), date: today(), receipt_path: null, created_at: new Date().toISOString() };
+          const t = { id: uuid(), type: "expense", amount: i.price, category: l.category || "Other", note: (i.name + " · " + l.name).slice(0, 120), date: today(), receipt_path: null, created_at: new Date().toISOString() };
           await putEnc("transactions", t); st.txs = [t, ...st.txs]; i.txId = t.id;
         }
         await saveList(l); render();
-        toast(i.txId ? "Bought · " + money(i.price) + " added to " + l.category + ". Tap the item to change the price." : "Ticked · " + i.name);
+        toast(i.txId ? "Bought · " + money(i.price) + " added to " + (l.category || "Other") + ". Tap ✎ to change the price." : "Ticked · " + i.name);
       } else {
         if (i.txId) await deleteTx(i.txId);
         i.done = false; i.paid = null; i.txId = null;
@@ -974,6 +989,19 @@
   $("listsWrap").addEventListener("click", async e => {
     const t = e.target.closest("[data-itick]");
     if (t) { const [lid, iid] = t.dataset.itick.split("|"); const l = st.lists.find(x => x.id === lid); const i = l && l.items.find(x => x.id === iid); if (i) tickItem(l, i); return; }
+    const ik = e.target.closest("[data-ikill]");
+    if (ik) {
+      if (!confirmTap(ik, "Tap the bin again to delete this item")) return;
+      const [lid, iid] = ik.dataset.ikill.split("|"); const l = st.lists.find(x => x.id === lid); const i = l && l.items.find(x => x.id === iid); if (!i) return;
+      try { await saveList({ ...l, items: l.items.filter(x => x.id !== iid) }); render(); toast("Deleted " + i.name + (i.txId ? ". Its expense stays in your journal." : "")); } catch (_) { toast("Couldn't delete. Check your connection."); }
+      return;
+    }
+    const lk = e.target.closest("[data-lkill]");
+    if (lk) {
+      if (!confirmTap(lk, "Tap the bin again to delete the whole list")) return;
+      try { await killList(lk.dataset.lkill); render(); toast("List deleted"); } catch (_) { toast("Couldn't delete. Try again."); }
+      return;
+    }
     const ie = e.target.closest("[data-iedit]");
     if (ie) { const [lid, iid] = ie.dataset.iedit.split("|"); openItem(lid, iid); return; }
     const le = e.target.closest("[data-ledit]"); if (le) { openList(st.lists.find(x => x.id === le.dataset.ledit)); return; }
@@ -998,13 +1026,13 @@
   function listHint() {
     const items = parseItems($("lItems").value), tot = items.reduce((a, i) => a + (i.price || 0), 0);
     const bud = parseFloat(String($("lBudget").value).replace(/[^0-9.]/g, "")) || 0;
-    $("lHint").textContent = items.length ? items.length + (items.length === 1 ? " item" : " items") + " · " + money(tot) + (bud > 0 ? (tot > bud ? " · " + money(tot - bud) + " over budget" : " · " + money(bud - tot) + " spare") : "") : "";
+    $("lHint").textContent = items.length ? items.length + (items.length === 1 ? " item" : " items") + (tot > 0 ? " · " + money(tot) : "") + (bud > 0 ? (tot > bud ? " · " + money(tot - bud) + " over budget" : " · " + money(bud - tot) + " spare") : "") : "";
   }
   function openList(l) {
-    le.id = l ? l.id : null; le.category = l ? l.category : (st.settings.expenseCats.includes("Groceries") ? "Groceries" : null);
+    le.id = l ? l.id : null; le.category = l ? (l.category || null) : null;
     $("lstTitle").textContent = l ? "Edit list" : "New shopping list";
     $("lName").value = l ? l.name : ""; $("lBudget").value = l && l.budget ? String(l.budget) : ""; $("lItems").value = "";
-    $("lItemsField").querySelector("label").textContent = l ? "Add more items (optional)" : "What to buy";
+    $("lItemsField").querySelector("label").textContent = l ? "Add more items (optional)" : "Items";
     $("lLog").checked = l ? l.log !== false : true;
     $("lErr").textContent = ""; $("lHint").textContent = ""; $("lDel").classList.toggle("hidden", !l);
     $("lNewRow").classList.add("hidden"); $("lNewCat").value = "";
@@ -1018,7 +1046,7 @@
   $("lChips").addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.new) { $("lNewRow").classList.remove("hidden"); $("lNewCat").focus(); return; }
-    le.category = b.dataset.c; $("lErr").textContent = ""; renderListChips();
+    le.category = le.category === b.dataset.c ? null : b.dataset.c; $("lErr").textContent = ""; renderListChips();
   });
   wireNewCat("l", name => { le.category = name; $("lErr").textContent = ""; renderListChips(); });
   $("lItems").addEventListener("input", listHint); $("lBudget").addEventListener("input", listHint);
@@ -1026,14 +1054,12 @@
     e.preventDefault();
     const name = $("lName").value.trim().slice(0, 60) || "Shopping list";
     const bud = parseFloat(String($("lBudget").value).replace(/[^0-9.]/g, "")) || 0;
-    if (!le.category) { $("lErr").textContent = "Choose a category, or tap + New to make one."; return; }
     const prev = le.id ? st.lists.find(x => x.id === le.id) : null;
     const add = parseItems($("lItems").value);
-    if (!prev && !add.length) { $("lErr").textContent = "Add at least one thing to buy."; $("lItems").focus(); return; }
     const l = { ...(prev || { id: uuid(), items: [], created_at: new Date().toISOString() }), name, budget: bud > 0 ? Math.round(bud * 100) / 100 : null, category: le.category, log: $("lLog").checked };
     l.items = [...(prev ? prev.items : []), ...add];
     $("lSave").disabled = true;
-    try { await saveList(l); closeList(); render(); toast(prev ? "List updated" : "List saved · " + l.items.length + (l.items.length === 1 ? " item" : " items")); }
+    try { await saveList(l); closeList(); render(); toast(prev ? "List updated" : "List saved" + (l.items.length ? " · " + l.items.length + (l.items.length === 1 ? " item" : " items") : ". Add items below it.")); }
     catch (_) { $("lErr").textContent = "Couldn't save. Check your connection."; }
     finally { $("lSave").disabled = false; }
   });

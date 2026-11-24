@@ -156,7 +156,7 @@
   <section class="view hidden" id="view-plans" aria-label="Plans and budgets">
     <header class="pagehead"><h1 class="display">Plans &amp; budgets</h1></header>
     <section class="card" id="listsCard">
-      <div class="card-head"><h2>Shopping lists</h2><button type="button" class="pillbtn" id="addList">+ New list</button></div>
+      <div class="card-head"><h2>Checklists</h2><button type="button" class="pillbtn" id="addList">+ New list</button></div>
       <div id="listsWrap"></div>
     </section>
     <section class="card" id="plansCard">
@@ -434,12 +434,12 @@
   <form class="sheet" id="lstForm" novalidate>
     <h2 id="lstTitle">New shopping list</h2>
     <div class="field"><label for="lName">List name</label><input id="lName" maxlength="60" placeholder="e.g. Saturday market, School things" autocomplete="off"></div>
-    <div class="field"><label for="lBudget">Budget for this list (optional) (<span class="curLbl">Rs</span>)</label><input id="lBudget" class="big" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
-    <div class="ask">Category</div>
+    <div class="field"><label for="lBudget">Budget (optional)</label><input id="lBudget" class="big" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+    <div class="ask">Category <span class="sub" style="font-family:var(--font-body)">(optional)</span></div>
     <div class="chips" id="lChips"></div>
     <div class="newcat hidden" id="lNewRow"><input id="lNewCat" class="search" maxlength="40" placeholder="New category, e.g. Hair, Church, Eban" aria-label="New category name"><button type="button" class="btn" id="lNewAdd">Add</button></div>
-    <div class="field" id="lItemsField"><label for="lItems">What to buy</label><textarea id="lItems" rows="4" placeholder="rice 400&#10;cooking oil 250&#10;soap 60"></textarea>
-      <span class="sub">One item per line, or separate them with commas. Put the price after the name. Tip: tap the microphone on your keyboard to say them.</span></div>
+    <div class="field" id="lItemsField"><label for="lItems">Items</label><textarea id="lItems" rows="4" placeholder="rice&#10;cooking oil 250&#10;soap"></textarea>
+      <span class="sub">One item per line, or separate them with commas. Adding a price after a name is optional. You can also leave this empty and add items later.</span></div>
     <label class="check"><input type="checkbox" id="lLog" checked> Record an expense when I tick an item</label>
     <div class="sub" id="lHint"></div>
     <div class="err" id="lErr"></div>
@@ -459,7 +459,7 @@
     <h2 id="itmTitle">Edit item</h2>
     <div class="field"><label for="iName">Item</label><input id="iName" maxlength="60" autocomplete="off"></div>
     <div class="row2">
-      <div class="field"><label for="iPrice">Planned price</label><input id="iPrice" class="big" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+      <div class="field"><label for="iPrice">Price (optional)</label><input id="iPrice" class="big" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
       <div class="field" id="iPaidField"><label for="iPaid">Price paid</label><input id="iPaid" class="big" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
     </div>
     <div class="err" id="iErr"></div>

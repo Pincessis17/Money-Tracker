@@ -363,3 +363,11 @@ body:not(.locked) #vaultView, body.signedout #vaultView { display: none; }
 .liadd .btn { padding: 8px 16px; }
 .lstmore { border: 0; background: none; color: var(--accent-ink); font-size: 13px; font-weight: 600; padding: 4px 0; justify-self: start; }
 textarea { font: inherit; color: inherit; border: 1px solid var(--line); background: var(--tile); border-radius: 14px; padding: 11px 14px; font-size: 16px; width: 100%; resize: vertical; }
+
+.li { grid-template-columns: 32px 1fr auto auto; }
+.lacts { display: inline-flex; gap: 2px; flex: none; }
+.iconb { width: 36px; height: 36px; border: 0; background: none; border-radius: 10px; color: var(--muted); display: grid; place-items: center; padding: 0; }
+.iconb:hover { background: var(--tile); color: var(--ink); }
+.iconb.arm { background: var(--bad-soft); color: var(--bad); }
+.lsthead { align-items: center; }
+.lsthead .lstname { flex: 1; }

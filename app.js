@@ -45,13 +45,25 @@
     $("aPass").autocomplete = up ? "new-password" : "current-password";
     $("aErr").textContent = ""; $("aOk").textContent = "";
   }
-  $("aSwitch").addEventListener("click", () => setAuthMode(!signUpMode));
+  $("aSwitch").addEventListener("click", () => { $("aResend").classList.add("hidden"); setAuthMode(!signUpMode); });
+  $("aResend").addEventListener("click", async () => {
+    const email = $("aEmail").value.trim();
+    if (!/^\S+@\S+\.\S+$/.test(email)) { $("aErr").textContent = "Type your email address above first."; return; }
+    $("aResend").disabled = true;
+    try {
+      const { error } = await sb.auth.resend({ type: "signup", email, options: { emailRedirectTo: location.origin + location.pathname } });
+      if (error) throw error;
+      $("aErr").textContent = ""; $("aOk").textContent = "A new confirmation email is on its way. Use the link in that newest email only, then come back and log in.";
+    } catch (err) {
+      $("aErr").textContent = /rate|seconds|too many/i.test((err && err.message) || "") ? "Please wait a minute before asking for another email." : "Couldn't send the email. Try again in a minute.";
+    } finally { $("aResend").disabled = false; }
+  });
   // A phone that has never logged in starts on "Create your account".
   try { if (!localStorage.getItem("mm-has-account")) setAuthMode(true); } catch (_) {}
   $("authForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const email = $("aEmail").value.trim(), password = $("aPass").value;
-    $("aErr").textContent = ""; $("aOk").textContent = "";
+    $("aErr").textContent = ""; $("aOk").textContent = ""; $("aResend").classList.add("hidden");
     if (!/^\S+@\S+\.\S+$/.test(email)) return ($("aErr").textContent = "Enter a valid email address.");
     if (password.length < 6) return ($("aErr").textContent = "Password needs at least 6 characters.");
     $("aSubmit").disabled = true;
@@ -73,7 +85,8 @@
       }
     } catch (err) {
       const m = (err && err.message) || "";
-      $("aErr").textContent = /confirm/i.test(m) ? "Confirm your email first: open the link we sent you, then sign in." :
+      if (/confirm/i.test(m)) $("aResend").classList.remove("hidden");
+      $("aErr").textContent = /confirm/i.test(m) ? "Your email isn't confirmed yet. Open the newest email from us and tap its link, or send a fresh one below." :
         /invalid login/i.test(m) ? "That email and password don't match." :
         /already registered/i.test(m) ? "That email already has an account. Sign in instead." :
         /not authori[sz]ed/i.test(m) ? "Sign-ups for new people aren't switched on yet. Ask Princess to turn them on." :

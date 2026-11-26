@@ -603,6 +603,104 @@
 
 
 
+
+  /* ---------- import from bank screenshots ---------- */
+  const imp = { rows: [], busy: false };
+  const normDesc = d => String(d || "").toLowerCase().replace(/[0-9#*\/.:-]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 24);
+  function learnedCat(desc, type) {
+    const k = normDesc(desc); if (!k) return null;
+    const hit = st.txs.find(t => t.type === type && t.imported && normDesc(t.note) === k);
+    return hit ? hit.category : null;
+  }
+  function isDup(r) {
+    const type = r.direction === "in" ? "income" : "expense";
+    return st.txs.some(t => t.type === type && t.date === r.date && Math.abs(t.amount - r.amount) < 0.01);
+  }
+  function renderImp() {
+    if (!imp.rows.length) { $("impList").innerHTML = ""; $("impSave").disabled = true; $("impSave").textContent = "Add"; return; }
+    const groups = [["out", "Money out"], ["in", "Money in"]];
+    $("impList").innerHTML = groups.map(([dir, label]) => {
+      const rows = imp.rows.filter(r => r.direction === dir); if (!rows.length) return "";
+      const cats = dir === "in" ? st.settings.incomeCats : st.settings.expenseCats;
+      return '<div class="impgroup">' + label.toUpperCase() + '</div>' + rows.map(r => {
+        const k = imp.rows.indexOf(r), opts = cats.includes(r.category) ? cats : [...cats, r.category];
+        return '<div class="improw' + (r.dup ? " dup" : "") + '"><input type="checkbox" data-ik="' + k + '"' + (r.on ? " checked" : "") + ' aria-label="Import ' + esc(r.description) + '">' +
+          '<div class="d"><b>' + esc(r.description || "Transaction") + '</b><span>' + esc(new Date(r.date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })) + (r.dup ? " · already logged" : "") + (r.currency && !/^(rs|mur)$/i.test(r.currency) ? " · " + esc(r.currency) : "") + '</span></div>' +
+          '<span class="a num ' + (dir === "in" ? "good" : "") + '">' + (dir === "in" ? "+" : "−") + esc(money(r.amount)) + '</span>' +
+          '<select data-ic="' + k + '" aria-label="Category for ' + esc(r.description) + '">' + opts.map(c => '<option' + (c === r.category ? " selected" : "") + '>' + esc(c) + '</option>').join("") + '</select></div>';
+      }).join("");
+    }).join("");
+    const n = imp.rows.filter(r => r.on).length;
+    $("impSave").disabled = n === 0 || imp.busy; $("impSave").textContent = n ? "Add " + n + (n === 1 ? " transaction" : " transactions") : "Add";
+  }
+  async function readShots(files) {
+    files = Array.from(files || []).filter(f => /^image\//.test(f.type)).slice(0, 8);
+    if (!files.length) return;
+    $("impOv").classList.add("open"); $("impErr").textContent = "";
+    imp.busy = true; renderImp();
+    $("impStatus").innerHTML = '<span class="spinner"></span>Reading ' + files.length + (files.length === 1 ? " screenshot" : " screenshots") + '…';
+    try {
+      const imgs = [];
+      for (const f of files) { const im = await loadImage(f); imgs.push(toCanvas(im, 2000).toDataURL("image/jpeg", 0.85).split(",")[1]); }
+      let found = [];
+      for (let b = 0; b < imgs.length; b += 4) {
+        const { data, error } = await sb.functions.invoke("read-statement", { body: { images: imgs.slice(b, b + 4), expenseCats: st.settings.expenseCats, incomeCats: st.settings.incomeCats, today: today() } });
+        if (error) { let code = ""; try { code = (await error.context.json()).error; } catch (_) {} throw new Error(code || "failed"); }
+        found = found.concat((data && data.result && data.result.transactions) || []);
+      }
+      let added = 0;
+      for (const t of found) {
+        if (imp.rows.some(r => r.date === t.date && r.direction === t.direction && Math.abs(r.amount - t.amount) < 0.01 && normDesc(r.description) === normDesc(t.description))) continue;
+        const type = t.direction === "in" ? "income" : "expense";
+        const cats = type === "income" ? st.settings.incomeCats : st.settings.expenseCats;
+        const sib = imp.rows.find(o => o.direction === t.direction && normDesc(o.description) && normDesc(o.description) === normDesc(t.description));
+        const cat = learnedCat(t.description, type) || (sib && sib.category) || (cats.includes(t.category) ? t.category : (cats.includes("Other") ? "Other" : cats[cats.length - 1]));
+        const r = { ...t, category: cat, touched: false }; r.dup = isDup(r); r.on = !r.dup && t.date <= today();
+        imp.rows.push(r); added++;
+      }
+      imp.rows.sort((a, b) => b.date.localeCompare(a.date));
+      const total = imp.rows.length, dups = imp.rows.filter(r => r.dup).length;
+      $("impStatus").textContent = total ? "Found " + total + (total === 1 ? " transaction" : " transactions") + (dups ? " · " + dups + " already in your journal (unticked)" : "") + ". Check each one and its category, then add them." :
+        "I couldn't find any transactions. Try a clearer screenshot of your transaction list.";
+      if (!added && found.length) toast("Those were already on the list");
+    } catch (e) {
+      const m = e && e.message;
+      $("impStatus").textContent = "";
+      $("impErr").textContent = m === "no_key" ? "Screenshot reading isn't switched on yet (the Gemini key is missing)." : m === "rate_limited" ? "Too many reads in a short time. Wait a minute and try again." : "Couldn't read the screenshots. Check your connection and try again.";
+    } finally { imp.busy = false; renderImp(); }
+  }
+  $("impBtn").addEventListener("click", () => { imp.rows = []; $("impStatus").textContent = ""; $("impIn").value = ""; $("impIn").click(); });
+  $("impMore").addEventListener("click", () => { $("impIn").value = ""; $("impIn").click(); });
+  $("impIn").addEventListener("change", () => readShots($("impIn").files));
+  $("impCancel").addEventListener("click", () => { $("impOv").classList.remove("open"); imp.rows = []; });
+  $("impList").addEventListener("change", e => {
+    const cb = e.target.closest("[data-ik]"); if (cb) { imp.rows[+cb.dataset.ik].on = cb.checked; renderImp(); return; }
+    const sel = e.target.closest("[data-ic]");
+    if (sel) {
+      const r = imp.rows[+sel.dataset.ic]; r.category = sel.value; r.touched = true;
+      // Apply the same category to similar, untouched rows (e.g. every "WINNERS").
+      const k = normDesc(r.description);
+      if (k) imp.rows.forEach(o => { if (o !== r && !o.touched && o.direction === r.direction && normDesc(o.description) === k) o.category = sel.value; });
+      renderImp();
+    }
+  });
+  $("impSave").addEventListener("click", async () => {
+    const pick = imp.rows.filter(r => r.on); if (!pick.length) return;
+    imp.busy = true; renderImp(); $("impSave").textContent = "Adding…";
+    let ok = 0;
+    try {
+      for (const r of pick) {
+        const t = { id: uuid(), type: r.direction === "in" ? "income" : "expense", amount: r.amount, category: r.category, note: String(r.description || "").slice(0, 120), date: r.date, receipt_path: null, imported: true, created_at: new Date().toISOString() };
+        await putEnc("transactions", t); st.txs.push(t); ok++;
+      }
+      $("impOv").classList.remove("open"); imp.rows = []; render();
+      toast("Added " + ok + (ok === 1 ? " transaction" : " transactions"));
+    } catch (_) {
+      imp.rows = imp.rows.filter(r => !(r.on && pick.indexOf(r) < ok)); render();
+      $("impErr").textContent = "Added " + ok + " of " + pick.length + ", then the connection dropped. Tap Add again for the rest.";
+    } finally { imp.busy = false; renderImp(); }
+  });
+
   /* ---------- currency tracker ---------- */
   const TRK = [{ ccy: "MUR", name: "Mauritian rupee", sym: "Rs ", src: null }, ...FX];
   const trkMeta = c => TRK.find(x => x.ccy === c) || { ccy: c, name: c, sym: c + " ", src: null };
@@ -1603,7 +1701,7 @@
     document.querySelectorAll(".seg button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); render();
   });
   $("search").addEventListener("input", e => { st.q = e.target.value; render(); });
-  document.addEventListener("keydown", e => { if (e.key === "Escape") { if ($("itmOv").classList.contains("open")) closeItem(); else if ($("lstOv").classList.contains("open")) closeList(); else if ($("cpOv").classList.contains("open")) $("cpOv").classList.remove("open"); else if ($("trkOv").classList.contains("open")) closeTrk(); else if ($("addOv").classList.contains("open")) $("addOv").classList.remove("open"); else if ($("holdOv").classList.contains("open")) closeHold(); else if ($("budOv").classList.contains("open")) closeBudget(); else if ($("remOv").classList.contains("open")) $("remOv").classList.remove("open"); else if ($("planOv").classList.contains("open")) closePlan(); else if ($("rcptOv").classList.contains("open")) $("rcptOv").classList.remove("open"); else if ($("setOv").classList.contains("open")) closeSettings(); else if ($("entryOv").classList.contains("open")) closeEntry(); } });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") { if ($("impOv").classList.contains("open")) $("impOv").classList.remove("open"); else if ($("itmOv").classList.contains("open")) closeItem(); else if ($("lstOv").classList.contains("open")) closeList(); else if ($("cpOv").classList.contains("open")) $("cpOv").classList.remove("open"); else if ($("trkOv").classList.contains("open")) closeTrk(); else if ($("addOv").classList.contains("open")) $("addOv").classList.remove("open"); else if ($("holdOv").classList.contains("open")) closeHold(); else if ($("budOv").classList.contains("open")) closeBudget(); else if ($("remOv").classList.contains("open")) $("remOv").classList.remove("open"); else if ($("planOv").classList.contains("open")) closePlan(); else if ($("rcptOv").classList.contains("open")) $("rcptOv").classList.remove("open"); else if ($("setOv").classList.contains("open")) closeSettings(); else if ($("entryOv").classList.contains("open")) closeEntry(); } });
 
   /* ---------- install tip ---------- */
   (function installTip() {

@@ -11,7 +11,7 @@
     expenseCats: ["Groceries","Eating out","Transport","Rent & housing","Bills & phone","School & books","Health","Personal care","Clothes","Fun & going out","Business","Family & gifts","Other"],
     incomeCats: ["Job / salary","Allowance","Freelance","Business","Gift","Other"],
     budgets: {},
-    name: "", theme: "blush", avatar: "girl", skin: "brown"
+    name: "", theme: "blush", avatar: "girl", skin: "brown", home: "MUR"
   };
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -21,7 +21,7 @@
   function today() { const d = new Date(); return ym(d) + "-" + String(d.getDate()).padStart(2, "0"); }
   function shiftMonth(m, n) { const [y, mo] = m.split("-").map(Number); return ym(new Date(y, mo - 1 + n, 1)); }
   function monthName(m, long) { const [y, mo] = m.split("-").map(Number); return (long ? new Date(y, mo-1, 1).toLocaleString("en-GB", { month: "long" }) : MONTHS[mo - 1]) + " " + y; }
-  function money(n) { return st.settings.currency + " " + (Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function money(n) { return (st.settings.currency || "Rs") + " " + (Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   function shortMoney(n) { if (n >= 1e6) return (n/1e6).toFixed(1).replace(/\.0$/,"") + "M"; if (n >= 1e3) return (n/1e3).toFixed(n >= 1e4 ? 0 : 1).replace(/\.0$/,"") + "k"; return String(Math.round(n)); }
   function plural(n) { return n + (n === 1 ? " entry" : " entries"); }
   function catColor(name, type) {
@@ -257,8 +257,9 @@
       let d;
       if (set.data.enc) { try { d = await Vault.dec(st.key, set.data.enc); } catch (_) { d = null; } }
       else { legacySettings = true; d = { currency: set.data.currency, expense_cats: set.data.expense_cats, income_cats: set.data.income_cats, budgets: set.data.budgets, display_name: set.data.display_name, theme: set.data.theme, avatar: set.data.avatar, skin: set.data.skin }; }
+      // Older accounts kept only a symbol: "Rs" means the Mauritian rupee.
       if (d) st.settings = { currency: d.currency || "Rs", expenseCats: d.expense_cats || clone(DEFAULTS.expenseCats), incomeCats: d.income_cats || clone(DEFAULTS.incomeCats), budgets: d.budgets || {},
-        name: d.display_name || "", theme: d.theme || "blush", avatar: d.avatar || "girl", skin: d.skin || "brown" };
+        name: d.display_name || "", theme: d.theme || "blush", avatar: d.avatar || "girl", skin: d.skin || "brown", home: d.home || "MUR" };
     }
     // Move any older unencrypted rows into the encrypted format, once.
     const toLock = [["transactions", T.legacy], ["plans", P.legacy], ["fx_holdings", H.legacy], ["fx_tracker", K.legacy]];
@@ -278,7 +279,7 @@
   }
   async function saveSettings() {
     await putEnc("settings", { currency: st.settings.currency, expense_cats: st.settings.expenseCats, income_cats: st.settings.incomeCats, budgets: st.settings.budgets || {},
-      display_name: st.settings.name || "", theme: st.settings.theme, avatar: st.settings.avatar, skin: st.settings.skin });
+      display_name: st.settings.name || "", theme: st.settings.theme, avatar: st.settings.avatar, skin: st.settings.skin, home: home() });
     st.hasSettingsRow = true;
   }
   let lastNowM = ym(new Date());
@@ -502,21 +503,34 @@
 
 
   /* ---------- currencies ---------- */
-  const FX = [
-    { ccy: "USD", name: "US dollar", sym: "$", src: "mcb" },
-    { ccy: "EUR", name: "Euro", sym: "€", src: "mcb" },
-    { ccy: "GBP", name: "British pound", sym: "£", src: "mcb" },
-    { ccy: "GHS", name: "Ghana cedi", sym: "GH₵", src: "market" }
+  // Every rate is stored as "MUR per 1 unit". MCB's board is used where MCB lists the currency, otherwise the market rate.
+  const CCY = [
+    { ccy: "MUR", name: "Mauritian rupee", sym: "Rs" }, { ccy: "GHS", name: "Ghana cedi", sym: "GH₵" },
+    { ccy: "USD", name: "US dollar", sym: "$" }, { ccy: "EUR", name: "Euro", sym: "€" }, { ccy: "GBP", name: "British pound", sym: "£" },
+    { ccy: "ZAR", name: "South African rand", sym: "R" }, { ccy: "NGN", name: "Nigerian naira", sym: "₦" }, { ccy: "KES", name: "Kenyan shilling", sym: "KSh" },
+    { ccy: "XOF", name: "West African CFA franc", sym: "CFA" }, { ccy: "INR", name: "Indian rupee", sym: "₹" }, { ccy: "AED", name: "UAE dirham", sym: "AED" },
+    { ccy: "CAD", name: "Canadian dollar", sym: "C$" }, { ccy: "AUD", name: "Australian dollar", sym: "A$" }, { ccy: "CHF", name: "Swiss franc", sym: "CHF" },
+    { ccy: "CNY", name: "Chinese yuan", sym: "CN¥" }, { ccy: "JPY", name: "Japanese yen", sym: "JP¥" }
   ];
+  const ccyMeta = c => CCY.find(x => x.ccy === c) || { ccy: c, name: c, sym: c };
+  const home = () => (st.settings.home && ccyMeta(st.settings.home).ccy) || "MUR";
+  const WATCH = ["MUR", "USD", "EUR", "GBP", "GHS"];
+  // Currencies shown on the Rates tab: the usual five, plus any the person tracks or holds, minus their home currency.
+  function watched() {
+    const extra = [...st.track.map(e => e.ccy), ...st.holds.map(h => h.ccy)];
+    return [...new Set([...WATCH, ...extra])].filter(c => c !== home() && murRate(c) > 0);
+  }
+  const FX = CCY.filter(c => c.ccy !== "MUR");
   function muToday() { return new Date(Date.now() + 4 * 3600e3).toISOString().slice(0, 10); }
   async function loadRates() {
     const since = new Date(Date.now() - 40 * 86400e3).toISOString().slice(0, 10);
     const { data, error } = await sb.from("fx_rates").select("day,ccy,source,buy,sell,mid").gte("day", since).in("ccy", FX.map(f => f.ccy)).order("day", { ascending: true });
     if (error) return;
+    st.fxFetched = true;
     st.fx = data.map(r => ({ ...r, buy: r.buy == null ? null : Number(r.buy), sell: r.sell == null ? null : Number(r.sell), mid: Number(r.mid) }));
     render();
     const t = muToday();
-    if (!st.fxTried && FX.some(f => !st.fx.some(r => r.ccy === f.ccy && r.source === f.src && r.day === t))) {
+    if (!st.fxTried && [...new Set([...WATCH, home()])].filter(c => c !== "MUR").some(c => !st.fx.some(r => r.ccy === c && r.day === t))) {
       st.fxTried = true;
       try { const { data: res } = await sb.functions.invoke("fetch-rates", { body: {} }); st.fxStatus = res || null; } catch (_) {}
       const again = await sb.from("fx_rates").select("day,ccy,source,buy,sell,mid").gte("day", since).in("ccy", FX.map(f => f.ccy)).order("day", { ascending: true });
@@ -524,7 +538,21 @@
       render();
     }
   }
-  function series(f) { return st.fx.filter(r => r.ccy === f.ccy && r.source === f.src); }
+  // A currency's rate history: MCB's board when MCB lists it, otherwise market rates.
+  function seriesC(c) {
+    const pref = home() === "MUR" ? "mcb" : "market", other = pref === "mcb" ? "market" : "mcb";
+    const m = st.fx.filter(r => r.ccy === c && r.source === pref);
+    return m.length ? m : st.fx.filter(r => r.ccy === c && r.source === other);
+  }
+  function series(f) { return seriesC(f.ccy || f); }
+  const isMcb = c => st.fx.some(r => r.ccy === c && r.source === "mcb");
+  const mcbLast = c => { const m = st.fx.filter(r => r.ccy === c && r.source === "mcb"); return m[m.length - 1]; };
+  // Rate history of 1 unit of c, priced in the home currency (mid rates).
+  function seriesHome(c) {
+    const h = home(), sc = c === "MUR" ? null : seriesC(c), sh = h === "MUR" ? null : seriesC(h);
+    const days = [...new Set([...(sc || []).map(r => r.day), ...(sh || []).map(r => r.day)])].sort();
+    return days.map(day => { const a = murRate(c, day), b = murRate(h, day); return a > 0 && b > 0 ? { day, mid: a / b } : null; }).filter(Boolean);
+  }
   function changeSince(ser, days) {
     if (ser.length < 2) return null;
     const last = ser[ser.length - 1];
@@ -546,67 +574,69 @@
   }
   function pctPill(c, label) {
     if (!c || Math.abs(c.pct) < 0.005) return c ? '<span class="pill">' + label + ' no change</span>' : "";
-    // A foreign currency going up means the rupee got weaker against it.
+    // A foreign currency going up means the home currency got weaker against it.
     return '<span class="pill ' + (c.pct > 0 ? "bad" : "good") + '">' + (c.pct > 0 ? "▲ " : "▼ ") + Math.abs(c.pct).toFixed(2) + "% " + label + '</span>';
   }
-  function fmtF(n, f) { return f.sym + (Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function fmtF(n, f) { const m = ccyMeta(f.ccy || f); return m.sym + (m.sym.length > 1 ? " " : "") + (Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   function latest(f) { const s = series(f); return s.length ? s[s.length - 1] : null; }
   function renderFx(net) {
-    const have = FX.map(f => ({ f, ser: series(f), last: latest(f) })).filter(x => x.last);
-    if (!have.length) {
+    const H = home(), hm = ccyMeta(H);
+    const list = watched().map(c => ({ c, m: ccyMeta(c), ser: seriesHome(c) })).filter(x => x.ser.length);
+    if (!list.length) {
       const miss = st.fxStatus && st.fxStatus.missing_keys && st.fxStatus.missing_keys.length;
       $("fxSub").textContent = "";
       $("fxList").innerHTML = '<div class="empty">' + (miss ? "Exchange rates switch on once the rate API keys are added in Supabase." : st.fxTried ? "Couldn't get today's rates yet. They update every morning." : "Loading exchange rates…") + '</div>';
       $("fxConv").classList.add("hidden");
-      renderHolds();
-      renderTracker();
+      renderHolds(); renderTracker();
       return;
     }
-    const newest = have.map(x => x.last.day).sort().pop();
+    const newest = list.map(x => x.ser[x.ser.length - 1].day).sort().pop();
     $("fxSub").textContent = "Rates of " + new Date(newest + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-    const cur = st.settings.currency;
-    let html = have.map(({ f, ser, last }) => {
-      const w = changeSince(ser, 7), m = changeSince(ser, 30);
-      const detail = f.src === "mcb" ? "MCB buys at " + last.buy.toFixed(2) + " · sells at " + last.sell.toFixed(2) : "Market rate (no MCB rate for cedi)";
-      return '<div class="fx"><div class="fxl"><div class="fxc"><b>' + f.ccy + '</b> <span>' + esc(f.name) + '</span></div>' +
-        '<div class="fxv num">1 ' + f.ccy + ' = ' + esc(cur) + ' ' + last.mid.toFixed(f.ccy === "GHS" ? 3 : 2) + '</div>' +
-        '<div class="fxp">' + (pctPill(w, "week") + " " + pctPill(m, "month")).trim() + (!w && !m ? '<span class="sub">Change shows after a few days of rates</span>' : "") + '</div>' +
+    const dp = v => v >= 100 ? 2 : v >= 1 ? 3 : 4;
+    let html = list.map(({ c, m, ser }) => {
+      const last = ser[ser.length - 1], w = changeSince(ser, 7), mo = changeSince(ser, 30);
+      let detail = "Market rate";
+      if (H === "MUR" && isMcb(c)) { const r = latest({ ccy: c }); detail = "MCB buys at " + r.buy.toFixed(2) + " · sells at " + r.sell.toFixed(2); }
+      else if (H === "MUR" && c !== "MUR") detail = "Market rate (MCB doesn't list " + c + ")";
+      return '<div class="fx"><div class="fxl"><div class="fxc"><b>' + c + '</b> <span>' + esc(m.name) + '</span></div>' +
+        '<div class="fxv num">1 ' + c + ' = ' + esc(fmtF(last.mid, H)).replace(/\.\d+$/, "") + (last.mid.toFixed(dp(last.mid)).match(/\.\d+$/) || [""])[0] + '</div>' +
+        '<div class="fxp">' + (pctPill(w, "week") + " " + pctPill(mo, "month")).trim() + (!w && !mo ? '<span class="sub">Change shows after a few days of rates</span>' : "") + '</div>' +
         '<div class="sub">' + esc(detail) + '</div></div>' + spark(ser.slice(-31)) + '</div>';
     }).join("");
     if (net > 0) {
-      const parts = have.map(({ f, last }) => fmtF(net / (f.src === "mcb" ? last.sell : last.mid), f));
+      const parts = list.map(({ c, ser }) => fmtF(net / ser[ser.length - 1].mid, c));
       html += '<div class="plansum" style="margin-top:10px"><span>This month\'s left over <b class="num">' + esc(money(net)) + '</b> is worth about <b class="num">' + esc(parts.join(" · ")) + '</b></span></div>';
     }
-    html += '<div class="sub" style="margin-top:6px">▲ red means that currency got more expensive, so your rupees buy less of it. ▼ green means your rupees buy more.</div>';
+    html += '<div class="sub" style="margin-top:6px">▲ red means that currency got more expensive, so your ' + esc(hm.name) + ' buys less of it. ▼ green means it buys more.</div>';
     $("fxList").innerHTML = html;
-    // converter
-    const opts = ["MUR", ...have.map(x => x.f.ccy)];
-    const keepFrom = $("cvFrom").value || "MUR", keepTo = $("cvTo").value || have[0].f.ccy;
-    const optHtml = opts.map(c => '<option value="' + c + '">' + c + '</option>').join("");
+    const opts = CCY.map(x => x.ccy).filter(c => murRate(c) > 0);
+    const keepFrom = $("cvFrom").value || H, keepTo = $("cvTo").value || list[0].c;
     if ($("cvFrom").dataset.opts !== opts.join()) {
+      const optHtml = opts.map(c => '<option value="' + c + '">' + c + '</option>').join("");
       $("cvFrom").innerHTML = optHtml; $("cvTo").innerHTML = optHtml;
       $("cvFrom").dataset.opts = opts.join();
-      $("cvFrom").value = opts.includes(keepFrom) ? keepFrom : "MUR";
+      $("cvFrom").value = opts.includes(keepFrom) ? keepFrom : H;
       $("cvTo").value = opts.includes(keepTo) && keepTo !== $("cvFrom").value ? keepTo : opts.find(c => c !== $("cvFrom").value);
     }
     $("fxConv").classList.remove("hidden");
-    convert();
-    renderHolds();
-    renderTracker();
+    convert(); renderHolds(); renderTracker();
   }
   function convert() {
     const amt = parseFloat(String($("cvAmt").value).replace(/[^0-9.]/g, ""));
     const from = $("cvFrom").value, to = $("cvTo").value;
     if (!(amt > 0) || !from || !to) { $("cvOut").textContent = "Type an amount to see what you'd get."; return; }
     if (from === to) { $("cvOut").textContent = "Pick two different currencies."; return; }
-    const meta = c => FX.find(f => f.ccy === c);
-    // MUR value of what you hand over: the bank BUYS your foreign currency (buy rate).
-    let mur = amt, used = [];
-    if (from !== "MUR") { const f = meta(from), r = latest(f); const rate = f.src === "mcb" ? r.buy : r.mid; mur = amt * rate; used.push(from + " at " + rate.toFixed(3) + (f.src === "mcb" ? " (MCB buys)" : " (market)")); }
-    let outAmt = mur, outTxt;
-    if (to === "MUR") outTxt = money(mur);
-    else { const f = meta(to), r = latest(f); const rate = f.src === "mcb" ? r.sell : r.mid; outAmt = mur / rate; outTxt = fmtF(outAmt, f); used.push(to + " at " + rate.toFixed(3) + (f.src === "mcb" ? " (MCB sells)" : " (market)")); }
-    $("cvOut").innerHTML = '<b class="num">' + esc(outTxt) + '</b><span class="sub"> · using ' + esc(used.join(", ")) + '</span>';
+    const used = [];
+    // Into rupees: MCB buys the foreign currency (buy rate). Out of rupees: MCB sells it (sell rate). Otherwise mid rates.
+    let mur;
+    if (from === "MUR") mur = amt;
+    else if (to === "MUR" && isMcb(from)) { const r = mcbLast(from); mur = amt * r.buy; used.push(from + " at " + r.buy.toFixed(3) + " (MCB buys)"); }
+    else { mur = amt * murRate(from); }
+    let out;
+    if (to === "MUR") out = mur;
+    else if (from === "MUR" && isMcb(to)) { const r = mcbLast(to); out = mur / r.sell; used.push(to + " at " + r.sell.toFixed(3) + " (MCB sells)"); }
+    else { out = mur / murRate(to); if (!used.length) used.push("market mid rates"); }
+    $("cvOut").innerHTML = '<b class="num">' + esc(fmtF(out, to)) + '</b><span class="sub"> · using ' + esc(used.join(", ")) + '</span>';
   }
   $("cvAmt").addEventListener("input", convert);
   $("cvFrom").addEventListener("change", () => { if ($("cvFrom").value === $("cvTo").value) $("cvTo").value = [...$("cvTo").options].map(o => o.value).find(c => c !== $("cvFrom").value); convert(); });
@@ -713,20 +743,17 @@
   });
 
   /* ---------- currency tracker ---------- */
-  const TRK = [{ ccy: "MUR", name: "Mauritian rupee", sym: "Rs ", src: null }, ...FX];
-  const trkMeta = c => TRK.find(x => x.ccy === c) || { ccy: c, name: c, sym: c + " ", src: null };
+  const trkMeta = ccyMeta;
   // MUR value of 1 unit of ccy (mid rate), on a given day (latest known on or before it), or now.
   function murRate(ccy, day) {
     if (ccy === "MUR") return 1;
-    const f = FX.find(x => x.ccy === ccy); if (!f) return null;
-    const ser = series(f); if (!ser.length) return null;
+    const ser = seriesC(ccy); if (!ser.length) return null;
     if (!day) return ser[ser.length - 1].mid;
     let r = null; for (const x of ser) { if (x.day <= day) r = x; }
     return r ? r.mid : null;
   }
   function fmtC(n, ccy) {
-    const m = trkMeta(ccy), v = (Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return ccy === "MUR" ? money(n) : m.sym + v;
+    return fmtF(n, ccy);
   }
   function trkBalances() {
     const by = {};
@@ -738,14 +765,14 @@
   function renderTracker() {
     const bals = trkBalances();
     if (!bals.length) {
-      $("trackList").innerHTML = '<div class="empty">Enter an amount once, like €200, and keep watching what it\'s worth in rupees, dollars, cedis and pounds as rates change. Add more whenever you receive it.</div>';
+      $("trackList").innerHTML = '<div class="empty">Enter an amount once, like €200, and keep watching what it\'s worth in other currencies as rates change. Add more whenever you receive it.</div>';
       return;
     }
     const newest = st.fx.length ? st.fx[st.fx.length - 1].day : null;
     const weekAgo = newest ? shiftDay(newest, -7) : null;
     $("trackList").innerHTML = bals.map(({ ccy, bal }) => {
       const m = trkMeta(ccy), rNow = murRate(ccy), entries = st.track.filter(e => e.ccy === ccy);
-      const targets = TRK.filter(t => t.ccy !== ccy);
+      const targets = [home(), ...watched()].filter((c, k, a) => c !== ccy && a.indexOf(c) === k).map(ccyMeta);
       const tiles = targets.map(t => {
         const tNow = murRate(t.ccy);
         if (!(rNow > 0) || !(tNow > 0)) return '<div class="trkv"><span>' + esc(t.ccy) + '</span><b class="sub">no rate yet</b></div>';
@@ -764,11 +791,11 @@
         '<div class="trkbtns"><button type="button" class="addbtn" data-trkadd="' + ccy + '" aria-label="Add ' + esc(m.name) + ' received">+ Add</button><button type="button" data-trkout="' + ccy + '" aria-label="Take ' + esc(m.name) + ' out">−</button></div></div>' +
         '<div class="trkgrid">' + tiles + '</div>' +
         '<details class="trkhist"><summary>History (' + entries.length + ')</summary>' + hist + '</details></div>';
-    }).join("") + '<div class="sub" style="margin-top:8px;font-size:12px">Values use mid rates (MCB for USD, EUR and GBP; market rate for GHS). "This week" compares with rates from 7 days earlier.</div>';
+    }).join("") + '<div class="sub" style="margin-top:8px;font-size:12px">Values use mid rates (MCB\'s rates where MCB lists the currency, market rates for the rest). "This week" compares with rates from 7 days earlier.</div>';
   }
   const tk = { id: null, ccy: "EUR", dir: "in" };
   function renderTrkChips() {
-    $("trkCcy").innerHTML = TRK.map(t => '<button type="button" class="chip" data-c="' + t.ccy + '" aria-pressed="' + (t.ccy === tk.ccy) + '">' + t.ccy + '</button>').join("");
+    $("trkCcy").innerHTML = CCY.filter(t => t.ccy === tk.ccy || murRate(t.ccy) > 0).map(t => '<button type="button" class="chip" data-c="' + t.ccy + '" aria-pressed="' + (t.ccy === tk.ccy) + '">' + t.ccy + '</button>').join("");
     document.querySelectorAll("#trkDir button").forEach(b => b.classList.toggle("on", b.dataset.d === tk.dir));
     $("trkAmtLbl").textContent = "Amount (" + tk.ccy + ")";
     trkHint();
@@ -838,53 +865,60 @@
   });
 
   /* ---------- my foreign money ---------- */
+  // Value today, in the person's home currency. With a rupee home and an MCB currency, use MCB's buy rate (what MCB pays you).
   function valueNow(hd) {
-    const f = FX.find(x => x.ccy === hd.ccy), r = f && latest(f);
-    if (!r) return null;
-    const rate = f.src === "mcb" ? r.buy : r.mid; // what you'd get changing it back to rupees today
-    return { rate, value: hd.amount * rate, src: f.src, day: r.day };
+    const H = home();
+    if (H === "MUR" && isMcb(hd.ccy)) { const r = latest({ ccy: hd.ccy }); return r ? { rate: r.buy, value: hd.amount * r.buy, src: "mcb" } : null; }
+    const a = murRate(hd.ccy), b = murRate(H); if (!(a > 0) || !(b > 0)) return null;
+    return { rate: a / b, value: hd.amount * a / b, src: "market" };
+  }
+  // What was paid, converted into today's home currency if it was recorded in a different one.
+  function holdCost(hd) {
+    const from = hd.home || "MUR", H = home();
+    if (from === H) return hd.cost_mur;
+    const a = murRate(from), b = murRate(H); return a > 0 && b > 0 ? hd.cost_mur * a / b : hd.cost_mur;
   }
   function gainHtml(g, base) {
     if (Math.abs(g) < 0.005) return '<span class="pill">no change</span>';
     return '<span class="pill ' + (g > 0 ? "good" : "bad") + '">' + (g > 0 ? "▲ +" : "▼ −") + esc(money(Math.abs(g))) + " (" + (g > 0 ? "+" : "−") + Math.abs(g / base * 100).toFixed(1) + '%)</span>';
   }
   function renderHolds() {
-    if (!st.holds.length) { $("holdList").innerHTML = '<div class="empty" style="padding:8px 0">When you change rupees into dollars, pounds or cedis, add it here to see each day if it has gained or lost value.</div>'; return; }
+    if (!st.holds.length) { $("holdList").innerHTML = '<div class="empty" style="padding:8px 0">When you change your money into another currency, add it here to see each day if it has gained or lost value.</div>'; return; }
     let totCost = 0, totVal = 0, allValued = true;
     const rows = st.holds.map(hd => {
-      const f = FX.find(x => x.ccy === hd.ccy) || { sym: hd.ccy + " ", ccy: hd.ccy };
-      const v = valueNow(hd), boughtAt = hd.cost_mur / hd.amount;
-      totCost += hd.cost_mur; if (v) totVal += v.value; else allValued = false;
+      const f = ccyMeta(hd.ccy), cost = holdCost(hd);
+      const v = valueNow(hd), boughtAt = cost / hd.amount;
+      totCost += cost; if (v) totVal += v.value; else allValued = false;
       const when = new Date(hd.date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
       return '<button type="button" class="holdrow" data-h="' + esc(hd.id) + '">' +
         '<div class="hr1"><b class="num">' + esc(fmtF(hd.amount, f)) + '</b>' + (v ? '<span>now worth <b class="num">' + esc(money(v.value)) + '</b></span>' : '<span class="sub">no rate yet</span>') + '</div>' +
-        '<div class="hr2">' + (v ? gainHtml(v.value - hd.cost_mur, hd.cost_mur) : "") + '<span class="sub">paid ' + esc(money(hd.cost_mur)) + ' on ' + esc(when) + ' (Rs ' + boughtAt.toFixed(2) + ' each)' + (v ? ' · today Rs ' + v.rate.toFixed(2) + (v.src === "mcb" ? " at MCB" : " market") : "") + (hd.note ? " · " + esc(hd.note) : "") + '</span></div></button>';
+        '<div class="hr2">' + (v ? gainHtml(v.value - cost, cost) : "") + '<span class="sub">paid ' + esc(money(cost)) + ' on ' + esc(when) + ' (' + esc(fmtF(boughtAt, home())) + ' each)' + (v ? ' · today ' + esc(fmtF(v.rate, home())) + (v.src === "mcb" ? " at MCB" : " market") : "") + (hd.note ? " · " + esc(hd.note) : "") + '</span></div></button>';
     }).join("");
     const g = totVal - totCost;
     const total = st.holds.length > 1 && allValued ? '<div class="plansum"><span>Paid <b class="num">' + esc(money(totCost)) + '</b></span><span>Worth now <b class="num">' + esc(money(totVal)) + '</b></span><span class="free">' + gainHtml(g, totCost) + '</span></div>' : "";
-    $("holdList").innerHTML = total + rows + '<div class="sub" style="margin-top:6px">"Worth now" is what MCB would give you today to change it back to rupees (its buy rate).</div>';
+    $("holdList").innerHTML = total + rows + '<div class="sub" style="margin-top:6px">"Worth now" is what it would be worth today in your home currency' + (home() === "MUR" ? " (MCB's buy rate for currencies MCB lists)" : " (market rate)") + '.</div>';
   }
   const he = { id: null, ccy: "USD" };
   function renderHoldChips() {
-    $("hCcy").innerHTML = FX.map(f => '<button type="button" class="chip" data-c="' + f.ccy + '" aria-pressed="' + (f.ccy === he.ccy) + '">' + f.ccy + ' · ' + esc(f.name) + '</button>').join("");
+    $("hCcy").innerHTML = FX.filter(f => f.ccy !== home() && (f.ccy === he.ccy || murRate(f.ccy) > 0)).map(f => '<button type="button" class="chip" data-c="' + f.ccy + '" aria-pressed="' + (f.ccy === he.ccy) + '">' + f.ccy + ' · ' + esc(f.name) + '</button>').join("");
     $("hAmtLbl").textContent = "I got (" + he.ccy + ")";
     holdHint();
   }
   function holdHint() {
     const cost = parseFloat(String($("hCost").value).replace(/[^0-9.]/g, "")), amt = parseFloat(String($("hAmt").value).replace(/[^0-9.]/g, ""));
-    const f = FX.find(x => x.ccy === he.ccy), r = latest(f);
-    const parts = [];
-    if (cost > 0 && amt > 0) parts.push("You paid Rs " + (cost / amt).toFixed(f.ccy === "GHS" ? 3 : 2) + " per " + f.ccy + ".");
-    if (r) {
-      const rate = f.src === "mcb" ? r.sell : r.mid;
-      parts.push("Today " + (f.src === "mcb" ? "MCB sells " : "the market rate is ") + f.ccy + " at Rs " + rate.toFixed(f.ccy === "GHS" ? 3 : 2) + (cost > 0 && !(amt > 0) ? ", so about " + fmtF(cost / rate, f) + " for that amount" : "") + ".");
-    }
+    const H = home(), c = he.ccy, parts = [];
+    if (cost > 0 && amt > 0) parts.push("You paid " + fmtF(cost / amt, H) + " per " + c + ".");
+    let rate = null, how = "the market rate is ";
+    if (H === "MUR" && isMcb(c)) { const r = latest({ ccy: c }); if (r) { rate = r.sell; how = "MCB sells " + c + " at "; } }
+    else { const a = murRate(c), b = murRate(H); if (a > 0 && b > 0) { rate = a / b; how = "the market rate is "; } }
+    if (rate) parts.push("Today " + how + fmtF(rate, H) + (cost > 0 && !(amt > 0) ? ", so about " + fmtF(cost / rate, c) + " for that amount" : "") + ".");
     $("hHint").textContent = parts.join(" ");
   }
   function openHold(hd) {
-    he.id = hd ? hd.id : null; he.ccy = hd ? hd.ccy : (he.ccy || "USD");
+    he.id = hd ? hd.id : null; he.ccy = hd ? hd.ccy : (he.ccy && he.ccy !== home() ? he.ccy : (home() === "USD" ? "EUR" : "USD"));
+    $("hCostLbl").textContent = "I paid (" + home() + ")";
     $("holdTitle").textContent = hd ? "Edit exchange" : "Record an exchange";
-    $("hCost").value = hd ? String(hd.cost_mur) : ""; $("hAmt").value = hd ? String(hd.amount) : "";
+    $("hCost").value = hd ? String(Math.round(holdCost(hd) * 100) / 100) : ""; $("hAmt").value = hd ? String(hd.amount) : "";
     $("hDate").value = hd ? hd.date : today(); $("hNote").value = hd ? hd.note : "";
     $("hErr").textContent = ""; $("hDel").classList.toggle("hidden", !hd);
     renderHoldChips();
@@ -901,10 +935,10 @@
   $("holdForm").addEventListener("submit", async e => {
     e.preventDefault();
     const cost = parseFloat(String($("hCost").value).replace(/[^0-9.]/g, "")), amt = parseFloat(String($("hAmt").value).replace(/[^0-9.]/g, ""));
-    if (!(cost > 0)) { $("hErr").textContent = "Enter how many rupees you paid."; $("hCost").focus(); return; }
+    if (!(cost > 0)) { $("hErr").textContent = "Enter how much you paid."; $("hCost").focus(); return; }
     if (!(amt > 0)) { $("hErr").textContent = "Enter how much " + he.ccy + " you got."; $("hAmt").focus(); return; }
     if (!$("hDate").value) { $("hErr").textContent = "Pick the date."; return; }
-    const row = { ccy: he.ccy, amount: Math.round(amt * 100) / 100, cost_mur: Math.round(cost * 100) / 100, date: $("hDate").value, note: $("hNote").value.trim().slice(0, 80) };
+    const row = { ccy: he.ccy, amount: Math.round(amt * 100) / 100, cost_mur: Math.round(cost * 100) / 100, home: home(), date: $("hDate").value, note: $("hNote").value.trim().slice(0, 80) };
     $("hSave").disabled = true;
     try {
       const prev = he.id ? st.holds.find(x => x.id === he.id) : null;
@@ -1657,7 +1691,8 @@
 
   /* ---------- settings ---------- */
   function renderSettings() {
-    $("sCur").value = st.settings.currency;
+    $("sHome").innerHTML = CCY.map(c => '<option value="' + c.ccy + '">' + esc(c.ccy + " · " + c.name) + '</option>').join("");
+    $("sHome").value = home(); $("sHomeNote").classList.add("hidden");
     $("sName").value = st.settings.name || "";
     renderLookPickers();
     const row = (c, key) => '<div class="catedit"><span><span class="dot" style="display:inline-block;margin-right:8px;background:' + catColor(c, key === "incomeCats" ? "income" : "expense") + '"></span>' + esc(c) + '</span><button type="button" data-k="' + key + '" data-c="' + esc(c) + '" aria-label="Remove ' + esc(c) + '">×</button></div>';
@@ -1687,16 +1722,17 @@
     try { await saveSettings(); } catch (err) { toast("Couldn't save that change"); }
   });
   async function closeSettings() {
-    const cur = $("sCur").value.trim().slice(0, 6) || "Rs";
+    const newHome = $("sHome").value || home(), cur = ccyMeta(newHome).sym;
     const name = $("sName").value.trim().slice(0, 40);
     $("setOv").classList.remove("open");
     const b = lookBefore || {};
-    const changed = cur !== st.settings.currency || name !== (st.settings.name || "") || b.theme !== st.settings.theme || b.avatar !== st.settings.avatar || b.skin !== st.settings.skin;
-    st.settings.currency = cur; st.settings.name = name;
+    const changed = newHome !== home() || cur !== st.settings.currency || name !== (st.settings.name || "") || b.theme !== st.settings.theme || b.avatar !== st.settings.avatar || b.skin !== st.settings.skin;
+    st.settings.currency = cur; st.settings.home = newHome; st.settings.name = name;
     applyLook(); render();
     if (changed) { try { await saveSettings(); } catch (e) { toast("Couldn't save your settings. Check your connection."); } }
   }
   $("setDone").addEventListener("click", closeSettings);
+  $("sHome").addEventListener("change", () => $("sHomeNote").classList.toggle("hidden", $("sHome").value === home()));
   $("signOut").addEventListener("click", async () => { $("setOv").classList.remove("open"); await Vault.forget(); await sb.auth.signOut(); });
   $("copyCsv").addEventListener("click", async () => {
     const rows = [["date","type","amount","category","note"]].concat([...st.txs].sort((a, b) => a.date.localeCompare(b.date)).map(t => [t.date, t.type, t.amount, t.category, t.note || ""]));

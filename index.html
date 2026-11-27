@@ -194,7 +194,7 @@
       </div>
       <div id="cvOut" class="cvout"></div>
     </section>
-    <div class="sub fxsrc">MCB rates via <a href="https://allratestoday.com/" target="_blank" rel="noopener">AllRatesToday</a> · Cedi market rate via <a href="https://fxfeed.io/" target="_blank" rel="noopener">fxfeed</a>. Indicative only.</div>
+    <div class="sub fxsrc">MCB rates via <a href="https://allratestoday.com/" target="_blank" rel="noopener">AllRatesToday</a> · Market rates via <a href="https://fxfeed.io/" target="_blank" rel="noopener">fxfeed</a>. Indicative only.</div>
   </section>
 </div>
 
@@ -283,7 +283,8 @@
     </div></div>
     <div><div class="sub sublbl">Avatar</div><div class="avpick" id="sAvatar"></div></div>
     <div><div class="sub sublbl">Skin tone</div><div class="skinpick" id="sSkin"></div></div>
-    <div class="field"><label for="sCur">Currency symbol</label><input id="sCur" maxlength="6"></div>
+    <div class="field"><label for="sHome">My currency</label><select id="sHome"></select>
+      <div id="sHomeNote" class="sub hidden" style="margin-top:6px">Amounts you've already entered keep their numbers; only the currency label changes. Rates and conversions will use your new currency.</div></div>
     <div class="privacy">
       <div><b>Encrypted</b><span class="sub">Your records are locked on your phone before they're saved. Only your passphrase or recovery code can open them.</span></div>
       <button type="button" class="pillbtn" id="openCp">Change passphrase</button>
@@ -366,7 +367,7 @@
     <div class="sub">Enter what you paid in rupees and what you got. The app then shows what it's worth each day at MCB's rate.</div>
     <div class="field"><label>Currency you got</label><div class="chips" id="hCcy"></div></div>
     <div class="row2">
-      <div class="field"><label for="hCost">I paid (<span class="curLbl">Rs</span>)</label><input id="hCost" class="big" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+      <div class="field"><label for="hCost" id="hCostLbl">I paid</label><input id="hCost" class="big" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
       <div class="field"><label for="hAmt" id="hAmtLbl">I got</label><input id="hAmt" class="big" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
     </div>
     <div class="sub" id="hHint"></div>

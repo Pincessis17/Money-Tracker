@@ -220,7 +220,9 @@
   }
 
   /* ---------- data ---------- */
+  let loadSeq = 0;
   async function loadAll() {
+    const mine = ++loadSeq;
     $("syncNote").textContent = "Loading your records…";
     render();
     if (!st.key) return;
@@ -232,6 +234,7 @@
       sb.from("fx_tracker").select("*"),
       sb.from("lists").select("*")
     ]);
+    if (mine !== loadSeq) return; // a newer refresh has started; let it win
     if (tx.error || set.error || pl.error || hl.error || tk.error || ls.error) {
       $("syncNote").textContent = "Not synced";
       banner("Couldn't load your records. Check your connection and pull down or reopen the app.");
@@ -242,6 +245,7 @@
     const P = await decRows(pl.data, r => ({ id: r.id, created_at: r.created_at, title: r.title, amount: Number(r.amount), category: r.category, due_date: r.due_date, done: r.done, paid_tx_id: r.paid_tx_id, done_at: r.done_at, start_date: r.start_date, end_date: r.end_date, repeat: r.repeat }));
     const H = await decRows(hl.data, r => ({ id: r.id, created_at: r.created_at, ccy: r.ccy, amount: Number(r.amount), cost_mur: Number(r.cost_mur), date: r.date, note: r.note || "" }));
     const K = await decRows(tk.data, r => ({ id: r.id, created_at: r.created_at, ccy: r.ccy, amount: Number(r.amount), date: r.date, note: r.note || "" }));
+    if (mine !== loadSeq) return;
     st.txs = T.out;
     st.plans = P.out.sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
     st.holds = H.out.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
@@ -277,7 +281,13 @@
       display_name: st.settings.name || "", theme: st.settings.theme, avatar: st.settings.avatar, skin: st.settings.skin });
     st.hasSettingsRow = true;
   }
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && st.user && st.key) loadAll(); });
+  let lastNowM = ym(new Date());
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    const nm = ym(new Date());
+    if (nm !== lastNowM) { if (st.month === lastNowM) st.month = nm; lastNowM = nm; }
+    if (st.user && st.key) loadAll(); else render();
+  });
 
   /* ---------- render ---------- */
   function monthTx(m) { return st.txs.filter(t => (t.date || "").startsWith(m)); }
@@ -327,14 +337,15 @@
   function render() {
     document.querySelectorAll(".curLbl").forEach(e => e.textContent = st.settings.currency);
     $("monthLabel").textContent = monthName(st.month, true);
-    const isNow = st.month === ym(new Date());
-    const cur = monthTx(st.month), prev = monthTx(shiftMonth(st.month, -1));
+    const nowM = ym(new Date());
+    const cur = monthTx(nowM), prev = monthTx(shiftMonth(nowM, -1));
     const s = sums(cur), p = sums(prev);
     const net = s.i - s.o;
+    const jcur = monthTx(st.month), js = sums(jcur), jnet = js.i - js.o;
     const planned = plannedTotal();
     const free = net - planned;
     // home hero
-    $("freeLbl").textContent = "Free to spend · " + monthName(st.month, true).split(" ")[0];
+    $("freeLbl").textContent = "Free to spend · " + monthName(nowM, true).split(" ")[0];
     $("freeAmt").innerHTML = (free < 0 ? "−" : "") + esc(money(Math.abs(free))).replace(/(\.\d\d)$/, "<small>$1</small>");
     $("freeAmt").style.color = free < 0 ? "var(--bad)" : "";
     $("freeSub").textContent = planned > 0 ? "after " + money(planned) + " set aside for " + openPlans().length + (openPlans().length === 1 ? " plan" : " plans") : (cur.length ? "money in minus what you spent" : "Add money in or an expense to get started");
@@ -345,9 +356,9 @@
     const diff = s.o - p.o;
     $("kOutHint").innerHTML = p.o > 0 && cur.length ? (diff > 0 ? 'Spending is <span class="bad">' + esc(money(diff)) + ' higher</span> than last month' : 'Spending is <span class="good">' + esc(money(-diff)) + ' lower</span> than last month') : "";
     // journal summary
-    $("jNet").textContent = (net < 0 ? "− " : "+ ") + money(Math.abs(net));
-    $("jIn").textContent = "+" + money(s.i) + " in";
-    $("jOut").textContent = "−" + money(s.o) + " out";
+    $("jNet").textContent = (jnet < 0 ? "− " : "+ ") + money(Math.abs(jnet));
+    $("jIn").textContent = "+" + money(js.i) + " in";
+    $("jOut").textContent = "−" + money(js.o) + " out";
     renderDue();
     renderWeek();
     renderHomeBudgets();
@@ -356,9 +367,9 @@
     renderLists();
     renderBudgets(cur);
     renderFx(net);
-    renderCats(cur, s.o);
+    renderCats(jcur, js.o);
     renderTrend();
-    renderList(cur);
+    renderList(jcur);
   }
 
   function renderDue() {
@@ -923,10 +934,10 @@
     const b = st.settings.budgets || {};
     const cats = Object.keys(b).filter(c => Number(b[c]) > 0);
     if (!cats.length) { $("budgetList").innerHTML = '<div class="empty">No budgets yet. Set one for something like Transport, and every transport expense will count down from it.</div>'; return; }
-    const isNow = st.month === ym(new Date());
-    const [y, mo] = st.month.split("-").map(Number);
+    const bm = ym(new Date()), isNow = true;
+    const [y, mo] = bm.split("-").map(Number);
     const daysLeft = isNow ? new Date(y, mo, 0).getDate() - new Date().getDate() + 1 : 0;
-    const rows = cats.map(c => ({ c, ...budgetState(c, st.month) })).sort((a, b2) => b2.pct - a.pct);
+    const rows = cats.map(c => ({ c, ...budgetState(c, bm) })).sort((a, b2) => b2.pct - a.pct);
     $("budgetList").innerHTML = rows.map(r => {
       const col = r.level === "over" ? "var(--expense)" : r.level === "warn" ? "#d48a12" : "var(--income)";
       const status = r.left >= 0 ? '<b class="num" style="color:' + col + '">' + esc(money(r.left)) + '</b> left' : '<b class="num" style="color:var(--expense)">Over by ' + esc(money(-r.left)) + '</b>';

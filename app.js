@@ -1294,7 +1294,7 @@
     return '<div class="plan' + (x.done ? " done" : "") + '">' +
       (withTick ? '<button type="button" class="tick" data-tick="' + esc(x.id) + '" aria-label="' + (x.done ? "Mark not paid: " : "Mark paid: ") + esc(x.title) + '">✓</button>' : '<span class="dot" style="background:' + catColor(x.category, "expense") + ';justify-self:center"></span>') +
       '<button type="button" class="body" data-plan="' + esc(x.id) + '"><div class="t1">' + esc(x.title) + '</div><div class="t2">' + esc(x.category) + (x.done ? " · paid" : dueText(x)) + '</div></button>' +
-      '<span class="amt num">' + esc(money(x.amount)) + '</span></div>';
+      '<span class="amt num">' + esc(money(x.amount)) + '</span>' + '<button type="button" class="iconb" data-pkill="' + esc(x.id) + '" aria-label="Delete plan ' + esc(x.title) + '">' + BIN + '</button>' + '</div>';
   }
   function periodRow(x) {
     const w = planWindow(x), spent = planSpent(x, w), left = x.amount - spent, ended = w.status === "ended";
@@ -1311,7 +1311,7 @@
     return '<div class="plan' + (ended ? " done" : "") + '">' +
       '<span class="tick period" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>' +
       '<button type="button" class="body" data-plan="' + esc(x.id) + '"><div class="t1">' + esc(x.title) + '</div><div class="t2">' + esc(x.category) + ' · ' + esc(rangeLabel(w.s, w.e)) + (x.repeat === "weekly" ? '<span class="rep">every week</span>' : "") + '</div></button>' +
-      '<span class="amt">' + status + '</span>' +
+      '<span class="amt">' + status + '</span>' + '<button type="button" class="iconb" data-pkill="' + esc(x.id) + '" aria-label="Delete plan ' + esc(x.title) + '">' + BIN + '</button>' +
       '<div class="pextra">' + (w.status === "upcoming" ? "" : '<div class="bar"><i style="width:' + Math.max(spent > 0 ? 2 : 0, pct) + '%;background:' + (ended ? "var(--muted)" : col) + '"></i></div>') + '<span class="sub">' + esc(line) + '</span></div></div>';
   }
   function renderPlans(net) {
@@ -1342,11 +1342,29 @@
   }
   $("planList").addEventListener("click", async e => {
     if (e.target.closest("#doneToggle")) { st.showDone = !st.showDone; render(); return; }
+    const kill = e.target.closest("[data-pkill]");
+    if (kill) {
+      if (!confirmTap(kill, "Tap the bin again to delete this plan")) return;
+      const { error } = await sb.from("plans").delete().eq("id", kill.dataset.pkill);
+      if (error) return toast("Couldn't delete. Check your connection.");
+      st.plans = st.plans.filter(x => x.id !== kill.dataset.pkill); render(); toast("Plan deleted");
+      return;
+    }
     const tick = e.target.closest("[data-tick]");
     if (tick) {
       const x = st.plans.find(p => p.id === tick.dataset.tick); if (!x) return;
-      try { await setPlanDone(x.id, !x.done); render(); toast(x.done ? "Moved back to plans" : "Paid · " + x.title); }
-      catch (err) { toast("Couldn't update. Check your connection."); }
+      if (!x.done) {
+        // Paying a plan = logging the expense, so the money isn't counted as free again.
+        openEntry({ type: "expense", category: x.category, planId: x.id });
+        $("fAmt").value = x.amount.toFixed(2); $("fNote").value = x.title;
+        return;
+      }
+      const tx = x.paid_tx_id && st.txs.find(t => t.id === x.paid_tx_id);
+      if (tx && !confirmTap(tick, "Tap again to undo. This also removes its " + money(tx.amount) + " expense")) return;
+      try {
+        if (tx) await deleteTx(tx.id);
+        await setPlanDone(x.id, false); render(); toast(tx ? "Moved back to plans · expense removed" : "Moved back to plans");
+      } catch (err) { toast("Couldn't update. Check your connection."); }
       return;
     }
     const b = e.target.closest("[data-plan]");

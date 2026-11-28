@@ -639,3 +639,7 @@ body.welcoming { background: linear-gradient(180deg, #D3EAF6 0%, #E0EDF3 55%, #F
 .themegrid button[aria-pressed="true"] span.tn::before { content: "✓ "; color: var(--accent-ink); }
 #themeOv { z-index: 60; }
 #stmOv { z-index: 60; } .pagehead .pillbtn { display: inline-flex; align-items: center; gap: 6px; }
+
+.linkbtn.forgot { justify-self: end; margin-top: -6px; font-size: 13.5px; }
+.rnote { text-align: center; margin: 0; font-size: 12.5px; }
+#pwOv { z-index: 70; }

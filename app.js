@@ -74,6 +74,7 @@
     const k = knownUser();
     $("authTitle").textContent = up ? "Create your account" : "Welcome back" + (k.name ? ", " + k.name : "");
     $("aNotMe").classList.toggle("hidden", up || !k.avatar);
+    $("aForgot").classList.toggle("hidden", up);
     let p = null; try { p = JSON.parse(localStorage.getItem("mm-pic") || "null"); } catch (_) {}
     const a = k.avatar.split("|");
     showPic($("authAvatar"), !up && p && p.src ? p : { src: !up && a[0] ? avatarSrc(a[0], a[1]) : "icons/avatars/girl-brown.png", img: false });
@@ -202,12 +203,82 @@
     } finally { $("aSubmit").disabled = false; $("aSubmit").textContent = label; }
   });
 
+  /* ---- forgot password: a code by email, typed in the app ---- */
+  let resetEmail = "", resetStep = 1;
+  function showReset(on) {
+    $("resetForm").classList.toggle("hidden", !on); $("authForm").classList.toggle("hidden", on);
+    if (!on) return;
+    resetStep = 1; resetEmail = "";
+    $("rEmail").value = $("aEmail").value.trim(); $("rCode").value = ""; $("rPass").value = "";
+    ["rStep2a", "rStep2b", "rResend"].forEach(id => $(id).classList.add("hidden")); $("rStep1").classList.remove("hidden");
+    $("rSub").textContent = "Type your email and we'll send you a code."; $("rSubmit").textContent = "Send code";
+    $("rErr").textContent = ""; $("rOk").textContent = "";
+    setTimeout(() => $("rEmail").focus(), 60);
+  }
+  async function sendReset() {
+    const { error } = await sb.auth.resetPasswordForEmail(resetEmail, { redirectTo: location.origin + location.pathname });
+    if (error) throw error;
+  }
+  $("aForgot").addEventListener("click", () => showReset(true));
+  $("rBack").addEventListener("click", () => { showReset(false); setAuthMode(false); });
+  $("rResend").addEventListener("click", async () => {
+    $("rResend").disabled = true; $("rErr").textContent = "";
+    try { await sendReset(); $("rOk").textContent = "New code sent. Use the code in the newest email."; }
+    catch (err) { $("rErr").textContent = /rate|seconds|too many/i.test((err && err.message) || "") ? "Please wait a minute before asking for another code." : "Couldn't send a code. Try again in a minute."; }
+    finally { $("rResend").disabled = false; }
+  });
+  $("resetForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    $("rErr").textContent = ""; $("rOk").textContent = "";
+    $("rSubmit").disabled = true;
+    try {
+      if (resetStep === 1) {
+        resetEmail = $("rEmail").value.trim();
+        if (!/^\S+@\S+\.\S+$/.test(resetEmail)) { $("rErr").textContent = "Enter a valid email address."; return; }
+        await sendReset();
+        resetStep = 2;
+        $("rStep1").classList.add("hidden"); ["rStep2a", "rStep2b", "rResend"].forEach(id => $(id).classList.remove("hidden"));
+        $("rSub").textContent = "If " + resetEmail + " has an account, we've sent it a code. Type the code and choose a new password. Check spam too.";
+        $("rSubmit").textContent = "Save new password";
+        setTimeout(() => $("rCode").focus(), 60);
+        return;
+      }
+      const token = $("rCode").value.replace(/\D/g, ""), pw = $("rPass").value;
+      if (token.length < 6) { $("rErr").textContent = "Type the code from the email."; return; }
+      if (pw.length < 6) { $("rErr").textContent = "Password needs at least 6 characters."; $("rPass").focus(); return; }
+      const v = await sb.auth.verifyOtp({ email: resetEmail, token, type: "recovery" });
+      if (v.error) throw v.error;
+      const u = await sb.auth.updateUser({ password: pw });
+      if (u.error) throw u.error;
+      showReset(false); $("rPass").value = "";
+      toast("Password changed. You're logged in.");
+    } catch (err) {
+      const m = (err && err.message) || "";
+      $("rErr").textContent = /expired|invalid|token/i.test(m) ? "That code is wrong or has expired. Check you used the newest email, or send a new code." :
+        /rate|seconds|too many/i.test(m) ? "Please wait a minute before asking for another code." :
+        /same.*password|different from the old/i.test(m) ? "Choose a password that's different from your old one." :
+        /fetch|network|load failed/i.test(m) ? "No internet connection. Try again when you're online." : "Something went wrong. Try again.";
+    } finally { $("rSubmit").disabled = false; }
+  });
+  // Someone tapped the link in the reset email instead of typing the code.
+  $("pwForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const pw = $("pwNew").value;
+    if (pw.length < 6) { $("pwErr").textContent = "Password needs at least 6 characters."; return; }
+    $("pwSave").disabled = true;
+    const { error } = await sb.auth.updateUser({ password: pw });
+    $("pwSave").disabled = false;
+    if (error) { $("pwErr").textContent = /same.*password|different from the old/i.test(error.message || "") ? "Choose a password that's different from your old one." : "Couldn't save. Try again."; return; }
+    $("pwOv").classList.remove("open"); $("pwNew").value = ""; toast("Password changed");
+  });
+
   sb.auth.onAuthStateChange((_evt, session) => {
+    if (_evt === "PASSWORD_RECOVERY") setTimeout(() => { $("pwErr").textContent = ""; $("pwOv").classList.add("open"); }, 300);
     const u = session ? session.user : null;
     if ((u && u.id) === (st.user && st.user.id)) return;
     st.user = u;
     document.body.classList.toggle("signedout", !u);
-    if (u) { $("aPass").value = ""; hideCode(); showWelcome(false); try { localStorage.setItem("mm-has-account", "1"); } catch (_) {} startVault(); }
+    if (u) { $("aPass").value = ""; hideCode(); showWelcome(false); $("resetForm").classList.add("hidden"); $("authForm").classList.remove("hidden"); try { localStorage.setItem("mm-has-account", "1"); } catch (_) {} startVault(); }
     else { if ($("welcome").classList.contains("hidden") && !signUpMode) setAuthMode(false); st.key = null; st.vault = null; st.lists = []; document.body.classList.remove("locked"); st.track = []; st.holds = []; st.txs = []; st.plans = []; st.settings = clone(DEFAULTS); }
   });
 

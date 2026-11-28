@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=45">
+<link rel="stylesheet" href="style.css?v=46">
 <script>try{var t=localStorage.getItem("mm-theme");if(["sky","blush","emerald","ember","midnight","onyx"].indexOf(t)>-1)document.documentElement.dataset.theme=t;}catch(e){}</script>
 </head>
 <body class="signedout">
@@ -45,12 +45,28 @@
     <div class="ordiv hidden" id="aOr"><span>or use your email</span></div>
     <div class="field"><label for="aEmail">Email</label><input id="aEmail" type="email" autocomplete="email" inputmode="email" required></div>
     <div class="field"><label for="aPass">Password</label><input id="aPass" type="password" autocomplete="current-password" minlength="6" required></div>
+    <button type="button" class="linkbtn forgot" id="aForgot">Forgot password?</button>
     <div class="err" id="aErr" role="alert"></div>
     <div class="ok" id="aOk" role="status"></div>
     <button class="switch hidden" type="button" id="aResend">Resend confirmation email</button>
     <button class="btn primary" type="submit" id="aSubmit">Log in</button>
     <button class="switch" type="button" id="aSwitch">New here? Create an account</button>
     <button class="linkbtn hidden" type="button" id="aNotMe">Not you? Use another account</button>
+  </form>
+  <form class="card authcard hidden" id="resetForm" novalidate>
+    <div class="authhead">
+      <h1 class="display">Reset your password</h1>
+      <p class="sub" id="rSub">Type your email and we'll send you a code.</p>
+    </div>
+    <div class="field" id="rStep1"><label for="rEmail">Email</label><input id="rEmail" type="email" autocomplete="email" inputmode="email"></div>
+    <div class="field hidden" id="rStep2a"><label for="rCode">Code from the email</label><input id="rCode" class="codein" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="123456"></div>
+    <div class="field hidden" id="rStep2b"><label for="rPass">New password</label><input id="rPass" type="password" autocomplete="new-password" minlength="6" placeholder="At least 6 characters"></div>
+    <div class="err" id="rErr" role="alert"></div>
+    <div class="ok" id="rOk" role="status"></div>
+    <button class="btn primary" type="submit" id="rSubmit">Send code</button>
+    <button class="switch hidden" type="button" id="rResend">Send a new code</button>
+    <button class="switch" type="button" id="rBack">Back to log in</button>
+    <p class="sub rnote">This changes your login password. The passphrase that unlocks your records stays the same.</p>
   </form>
   <form class="card authcard hidden" id="codeForm" novalidate>
     <div class="authhead">
@@ -334,6 +350,15 @@
   </div>
 </div>
 
+<div class="overlay" id="pwOv" role="dialog" aria-modal="true" aria-labelledby="pwTitle">
+  <form class="sheet" id="pwForm" novalidate>
+    <h2 id="pwTitle">Choose a new password</h2>
+    <div class="field"><label for="pwNew">New password</label><input id="pwNew" type="password" autocomplete="new-password" minlength="6" placeholder="At least 6 characters"></div>
+    <div class="err" id="pwErr" role="alert"></div>
+    <div class="actions"><div class="right"><button type="submit" class="btn primary" id="pwSave">Save new password</button></div></div>
+  </form>
+</div>
+
 <div class="overlay" id="stmOv" role="dialog" aria-modal="true" aria-labelledby="stmTitle">
   <div class="sheet">
     <h2 id="stmTitle">Download a statement</h2>
@@ -607,10 +632,10 @@
 
 <div class="toast" id="toast" role="status"></div>
 
-<script src="i18n.js?v=45"></script>
+<script src="i18n.js?v=46"></script>
 <script src="supabase.js"></script>
-<script src="config.js?v=45"></script>
-<script src="vault.js?v=45"></script>
-<script src="app.js?v=45"></script>
+<script src="config.js?v=46"></script>
+<script src="vault.js?v=46"></script>
+<script src="app.js?v=46"></script>
 </body>
 </html>

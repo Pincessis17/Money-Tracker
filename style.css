@@ -1,6 +1,35 @@
 /* My Money — soft theme. Two palettes: Blush (default) and Sky, chosen per person in Settings.
    Layout: single column app with bottom tab bar; sheets slide up from the bottom. */
-:root, :root[data-theme="blush"] {
+:root, :root[data-theme="emerald"] {
+  --bg: #F3F7F5;
+  --bg-grad: #F3F7F5;
+  --surface: #FFFFFF;
+  --card: #FFFFFF;
+  --card-line: #E3ECE7;
+  --tile: #EEF4F1;
+  --line: #DDE8E2;
+  --shadow: 0 8px 24px rgba(15,70,50,0.06);
+  --ink: #0E2A21;
+  --muted: #5B7268;
+  --accent: #0F6B4B;
+  --accent-ink: #0F6B4B;
+  --accent-soft: #DCEFE6;
+  --accent-glow: rgba(15,107,75,0.30);
+  --good: #1E8A55;
+  --good-soft: #E3F4EA;
+  --bad: #B3402F;
+  --bad-soft: #FBE7E3;
+  --warn: #A8702E;
+  --warn-soft: #F6EEDF;
+  --nav: rgba(255,255,255,0.96);
+  --font-display: "Plus Jakarta Sans", system-ui, sans-serif;
+  --display-weight: 800;
+  --font-body: "Plus Jakarta Sans", system-ui, sans-serif;
+  --hero-bg: #0F5C41;
+  --income: var(--good); --expense: var(--bad); --income-soft: var(--good-soft); --expense-soft: var(--bad-soft);
+  color-scheme: light;
+}
+:root[data-theme="blush"] {
   --bg: #F8F0EB;
   --bg-grad: radial-gradient(120% 60% at 100% 0%, rgba(244,200,206,0.55), rgba(244,200,206,0) 60%), #F8F0EB;
   --surface: #FFFFFF;
@@ -258,7 +287,7 @@ body:not(.locked) #vaultView, body.signedout #vaultView { display: none; }
 .addopt.primaryopt { grid-column: span 2; background: var(--accent-soft); border-color: var(--accent-soft); }
 .addic { width: 42px; height: 42px; border-radius: 14px; background: var(--surface); color: var(--accent-ink); display: grid; place-items: center; margin-bottom: 4px; }
 .addic.bad { color: var(--bad); } .addic.good { color: var(--good); }
-.themepick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.themepick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .themeopt { border: 2px solid var(--line); border-radius: 18px; padding: 12px; background: var(--surface); display: grid; gap: 8px; justify-items: start; font-weight: 600; }
 .themeopt[aria-pressed="true"] { border-color: var(--accent); }
 .themeopt .sw { display: flex; gap: 4px; }
@@ -420,3 +449,20 @@ body.welcoming #authView > :not(.welcome):not(.installslot) { display: none; }
 .wsign { text-align: center; margin: 0; color: var(--muted); font-size: 14px; }
 .linkbtn { border: 0; background: none; padding: 6px 2px; color: var(--accent-ink); font: inherit; font-weight: 700; }
 #aNotMe { justify-self: center; font-size: 14px; }
+
+/* Emerald: the green balance card */
+:root[data-theme="emerald"] .hero { background: var(--hero-bg); border-color: var(--hero-bg); color: #fff; position: relative; overflow: hidden; }
+:root[data-theme="emerald"] .hero::before { content: ""; position: absolute; right: -40px; top: -50px; width: 170px; height: 170px; border-radius: 50%; border: 28px solid rgba(255,255,255,0.07); pointer-events: none; }
+:root[data-theme="emerald"] .hero .sub, :root[data-theme="emerald"] .hero .bignum small { color: #CDEBDD; }
+:root[data-theme="emerald"] .hero .tile { background: rgba(255,255,255,0.12); }
+:root[data-theme="emerald"] .hero .tile span { color: #CDEBDD; }
+:root[data-theme="emerald"] .hero .tile b, :root[data-theme="emerald"] .hero .tile b.good, :root[data-theme="emerald"] .hero .tile b.bad { color: #fff; }
+:root[data-theme="emerald"] .hero .pill { background: rgba(255,255,255,0.16); color: #fff; }
+:root[data-theme="emerald"] .display { letter-spacing: -0.02em; }
+.themeopt.emerald .sw i:nth-child(1) { background: #F3F7F5; border: 1px solid #DDE8E2; } .themeopt.emerald .sw i:nth-child(2) { background: #0F6B4B; } .themeopt.emerald .sw i:nth-child(3) { background: #0E2A21; }
+
+/* quick add buttons on Home */
+.quick { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 2px 0; }
+.quick button { border: 0; background: none; display: grid; justify-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--ink); padding: 4px 0; }
+.quick span { width: 54px; height: 54px; border-radius: 27px; background: var(--surface); border: 1px solid var(--line); color: var(--accent-ink); display: grid; place-items: center; box-shadow: var(--shadow); }
+.quick button:active span { transform: scale(.95); }

@@ -11,7 +11,7 @@
     expenseCats: ["Groceries","Eating out","Transport","Rent & housing","Bills & phone","School & books","Health","Personal care","Clothes","Fun & going out","Business","Family & gifts","Other"],
     incomeCats: ["Job / salary","Allowance","Freelance","Business","Gift","Other"],
     budgets: {},
-    name: "", theme: "blush", avatar: "girl", skin: "brown", home: "MUR"
+    name: "", theme: "emerald", avatar: "girl", skin: "brown", home: "MUR"
   };
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -391,10 +391,10 @@
   /* ---------- look: theme + avatar ---------- */
   function avatarSrc(kind, skin) { return "icons/avatars/" + (kind === "boy" ? "boy" : "girl") + "-" + (["deep", "brown", "tan", "light"].includes(skin) ? skin : "brown") + ".png"; }
   function applyLook() {
-    const s = st.settings, theme = s.theme === "sky" ? "sky" : "blush";
+    const s = st.settings, theme = ["sky", "blush", "emerald"].includes(s.theme) ? s.theme : "emerald";
     document.documentElement.dataset.theme = theme;
     try { localStorage.setItem("mm-theme", theme); localStorage.setItem("mm-avatar", s.avatar + "|" + s.skin); localStorage.setItem("mm-name", s.name || ""); } catch (_) {}
-    const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = theme === "sky" ? "#EAF1FC" : "#F8F0EB";
+    const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = { sky: "#EAF1FC", blush: "#F8F0EB", emerald: "#F3F7F5" }[theme];
     const src = avatarSrc(s.avatar, s.skin);
     $("meAvatar").src = src; $("authAvatar").src = src;
     const h = new Date().getHours();
@@ -421,9 +421,33 @@
   $("addCancel").addEventListener("click", () => $("addOv").classList.remove("open"));
   $("addOv").addEventListener("click", e => { if (e.target === $("addOv") || e.target.closest(".addopt")) $("addOv").classList.remove("open"); });
 
+  // Icons for the built-in categories; anything custom shows its first two letters.
+  const CAT_ICON = {
+    "Groceries": '<path d="M5 7h14l-1.5 11a2 2 0 0 1-2 1.7h-7a2 2 0 0 1-2-1.7z"/><path d="M9 7a3 3 0 0 1 6 0"/>',
+    "Eating out": '<path d="M7 3v8a3 3 0 0 0 6 0V3M10 3v18M17 3c-2 2-2 6 0 8v10"/>',
+    "Transport": '<rect x="4" y="4" width="16" height="13" rx="3"/><path d="M4 11h16M8 20l1-3M16 20l-1-3"/>',
+    "Rent & housing": '<path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-5h4v5"/>',
+    "Bills & phone": '<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 17h2"/>',
+    "School & books": '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5M9 7h6"/>',
+    "Health": '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
+    "Personal care": '<path d="M12 3s5 5.5 5 9.5a5 5 0 0 1-10 0C7 8.5 12 3 12 3z"/>',
+    "Clothes": '<path d="M8 3l-5 3 2 4 2-1v12h10V9l2 1 2-4-5-3a4 4 0 0 1-8 0z"/>',
+    "Fun & going out": '<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>',
+    "Business": '<rect x="3" y="7" width="18" height="13" rx="3"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/>',
+    "Family & gifts": '<rect x="4" y="9" width="16" height="11" rx="2"/><path d="M3 9h18v-2H3zM12 7v13M12 7s-1-4-4-4-2 4 4 4zM12 7s1-4 4-4 2 4-4 4z"/>',
+    "Gift": '<rect x="4" y="9" width="16" height="11" rx="2"/><path d="M3 9h18v-2H3zM12 7v13M12 7s-1-4-4-4-2 4 4 4zM12 7s1-4 4-4 2 4-4 4z"/>',
+    "Job / salary": '<rect x="3" y="6" width="18" height="12" rx="3"/><circle cx="12" cy="12" r="2.5"/>',
+    "Allowance": '<path d="M4 7a2 2 0 0 1 2-2h12v4M4 7v10a2 2 0 0 0 2 2h14V9H6a2 2 0 0 1-2-2z"/><circle cx="16" cy="14" r="1.2"/>',
+    "Freelance": '<rect x="4" y="5" width="16" height="11" rx="2"/><path d="M2 19h20"/>',
+    "Other": '<circle cx="6" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18" cy="12" r="1.3"/>'
+  };
+  function catIcon(cat) {
+    const p = CAT_ICON[cat];
+    return p ? '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>' : esc((cat || "?").slice(0, 2));
+  }
   function txRow(t) {
     const inc = t.type === "income", col = catColor(t.category || "Other", t.type);
-    return '<button class="tx" data-id="' + esc(t.id) + '"><span class="ic" style="background:color-mix(in srgb, ' + col + ' 16%, white);color:' + col + '">' + esc((t.category || "?").slice(0, 2)) + '</span>' +
+    return '<button class="tx" data-id="' + esc(t.id) + '"><span class="ic" style="background:color-mix(in srgb, ' + col + ' 16%, white);color:' + col + '">' + catIcon(t.category) + '</span>' +
       '<span style="min-width:0"><div class="t1">' + esc(t.note || t.category || "Entry") + '</div><div class="t2">' + esc(t.category || "Uncategorised") + (t.receipt_path ? " · receipt" : "") + '</div></span>' +
       '<span class="amt num ' + (inc ? "in" : "out") + '">' + (inc ? "+" : "−") + esc(money(t.amount)) + '</span></button>';
   }
@@ -1748,6 +1772,8 @@
   $("rcptOv").addEventListener("click", e => { if (e.target === $("rcptOv")) $("rcptOv").classList.remove("open"); });
 
   $("addIn").addEventListener("click", () => openEntry({ type: "income" }));
+  // Home quick buttons reuse the + menu's actions.
+  $("quick").addEventListener("click", e => { const b = e.target.closest("[data-q]"); if (b) $(b.dataset.q).click(); });
   $("addOut").addEventListener("click", () => openEntry({ type: "expense" }));
   $("txList").addEventListener("click", e => { const b = e.target.closest(".tx"); if (!b) return; const t = st.txs.find(x => x.id === b.dataset.id); if (t) openEntry({ tx: t }); });
 

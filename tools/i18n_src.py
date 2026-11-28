@@ -184,6 +184,8 @@ T = {
 "One last step": ("Une dernière étape", "Enn dernie etap"),
 "Choose a password to keep your money records private. You'll need it if you use My Money on another phone.": ("Choisissez un mot de passe pour garder vos données privées. Il vous sera demandé si vous utilisez My Money sur un autre téléphone.", "Swazir enn modpas pou gard ou bann done prive. Ou pou bizin li si ou servi My Money lor enn lot telefonn."),
 "Records password": ("Mot de passe des données", "Modpas pou ou done"),
+"Welcome": ("Bienvenue", "Byenveni"),
+"Let's get your money in order": ("Mettons de l'ordre dans votre argent", "Anou met ou lakaz larzan an lord"),
 "Tap to skip": ("Touchez pour passer", "Tap pou sote"),
 "Good afternoon": ("Bon après-midi", "Bonapremidi"),
 "Good evening": ("Bonsoir", "Bonswar"),

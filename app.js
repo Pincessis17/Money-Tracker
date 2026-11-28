@@ -473,8 +473,18 @@
     document.body.classList.remove("locked");
     await loadAll();
     st.welcome = false;
+    const isNew = !!st.newRcode;
     // A brand-new account: keep the recovery code (encrypted, like everything else) so Home can show it.
-    if (st.newRcode) { st.settings.rcode = st.newRcode; st.settings.rsaved = false; st.newRcode = null; saveSettings().catch(() => {}); render(); }
+    if (isNew) {
+      st.settings.rcode = st.newRcode; st.settings.rsaved = false; st.newRcode = null;
+      // Signed up with Google: we already know their name, so use their first name.
+      const md = (st.user && st.user.user_metadata) || {};
+      const gName = String(md.full_name || md.name || md.given_name || "").trim().split(/\s+/)[0] || "";
+      if (gName && !st.settings.name) { st.settings.name = gName.slice(0, 40); st.settings.autoName = true; }
+      applyLook(); saveSettings().catch(() => {}); render();
+    }
+    // First time on this phone: the welcome animation, then Home.
+    welcomeBack({ first: isNew });
     syncVaultPass(syncPw || loginPass);
   }
   const passProblem = (a, b) => a.length < 8 ? "Use at least 8 characters. A few random words works well." : a !== b ? "The two passphrases don't match." : "";
@@ -603,7 +613,7 @@
       // Older accounts kept only a symbol: "Rs" means the Mauritian rupee.
       if (d) st.settings = { currency: d.currency || "Rs", expenseCats: d.expense_cats || clone(DEFAULTS.expenseCats), incomeCats: d.income_cats || clone(DEFAULTS.incomeCats), budgets: d.budgets || {},
         name: d.display_name || "", theme: d.theme || "emerald", avatar: d.avatar || "girl", skin: d.skin || "brown", home: d.home || "MUR", look: d.look || 0, lang: d.lang || "", pic: d.pic || "", photo: d.photo || "",
-        rcode: d.rcode || "", rsaved: !!d.rsaved, skipSetup: !!d.skipSetup };
+        rcode: d.rcode || "", rsaved: !!d.rsaved, skipSetup: !!d.skipSetup, autoName: !!d.autoName };
       // The language this person chose follows them to other phones.
       if (d && d.lang && d.lang !== I18N.lang) I18N.set(d.lang, true);
       // Emerald became the default look: move every account to it once. People can switch back in Settings.
@@ -628,7 +638,7 @@
   async function saveSettings() {
     await putEnc("settings", { currency: st.settings.currency, expense_cats: st.settings.expenseCats, income_cats: st.settings.incomeCats, budgets: st.settings.budgets || {},
       display_name: st.settings.name || "", theme: st.settings.theme, avatar: st.settings.avatar, skin: st.settings.skin, home: home(), look: st.settings.look || 2, lang: st.settings.lang || I18N.lang, pic: st.settings.pic || "", photo: st.settings.photo || "",
-      rcode: st.settings.rcode || "", rsaved: !!st.settings.rsaved, skipSetup: !!st.settings.skipSetup });
+      rcode: st.settings.rcode || "", rsaved: !!st.settings.rsaved, skipSetup: !!st.settings.skipSetup, autoName: !!st.settings.autoName });
     st.hasSettingsRow = true;
   }
   let lastNowM = ym(new Date());
@@ -727,7 +737,7 @@
         '<div class="scbtns">' + (rcodeShown ? '<button type="button" class="btn" data-sc="copy">Copy</button><button type="button" class="btn primary" data-sc="saved">I\'ve saved it</button>'
           : '<button type="button" class="btn primary" data-sc="show">Show code</button>') + '</div></section>');
     }
-    if (st.key && !s.name && !s.skipSetup) {
+    if (st.key && !s.skipSetup && (!s.name || s.autoName)) {
       out.push('<section class="card setupcard" aria-labelledby="scP"><div class="schead"><img class="scav" src="' + esc(picOf(s).src) + '" alt="">' +
         '<div><b id="scP">Make it yours</b><p class="sub">Add your name and picture, and choose your currency and colours.</p></div>' +
         '<button type="button" class="iconb scx" data-sc="skip" aria-label="Not now">✕</button></div>' +
@@ -2303,8 +2313,8 @@
     const name = $("sName").value.trim().slice(0, 40);
     $("setOv").classList.remove("open");
     const b = lookBefore || {};
-    const changed = newHome !== home() || cur !== st.settings.currency || name !== (st.settings.name || "") || b.theme !== st.settings.theme || b.avatar !== st.settings.avatar || b.skin !== st.settings.skin || b.pic !== st.settings.pic || b.photo !== st.settings.photo;
-    st.settings.currency = cur; st.settings.home = newHome; st.settings.name = name;
+    const changed = !!st.settings.autoName || newHome !== home() || cur !== st.settings.currency || name !== (st.settings.name || "") || b.theme !== st.settings.theme || b.avatar !== st.settings.avatar || b.skin !== st.settings.skin || b.pic !== st.settings.pic || b.photo !== st.settings.photo;
+    st.settings.currency = cur; st.settings.home = newHome; st.settings.name = name; st.settings.autoName = false;
     applyLook(); render();
     if (changed) { try { await saveSettings(); } catch (e) { toast("Couldn't save your settings. Check your connection."); } }
   }
@@ -2612,14 +2622,19 @@
   let wbT = null;
   const seenAt = () => { try { return Number(localStorage.getItem("mm-seen") || 0); } catch (_) { return 0; } };
   const markSeen = () => { try { localStorage.setItem("mm-seen", String(Date.now())); } catch (_) {} };
-  function welcomeBack() {
+  // opts.first: a brand-new account ("Welcome"); otherwise "Welcome back".
+  function welcomeBack(opts) {
+    opts = opts || {};
     const k = knownUser(); let p = null;
     try { p = JSON.parse(localStorage.getItem("mm-pic") || "null"); } catch (_) {}
     const a = k.avatar.split("|");
     showPic($("wbPic"), p && p.src ? p : { src: avatarSrc(a[0], a[1]), img: false });
+    $("wbWord").textContent = opts.first ? "Welcome" : "Welcome back";
     $("wbName").textContent = k.name || "";
+    $("wbName").classList.toggle("hidden", !k.name);
     const h = new Date().getHours();
-    $("wbWhen").textContent = (h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening") + " · " + new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+    $("wbWhen").textContent = opts.first ? "Let's get your money in order" :
+      (h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening") + " · " + new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
     const w = $("wback");
     w.classList.remove("hidden", "out", "play"); void w.offsetWidth; w.classList.add("play");
     markSeen();

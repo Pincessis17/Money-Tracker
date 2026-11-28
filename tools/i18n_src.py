@@ -292,6 +292,9 @@ T = {
 "Where the money went": ("Où est passé l'argent", "Kot larzan finn ale"),
 "Last 6 months": ("6 derniers mois", "6 dernie mwa"),
 "Money in and spent over the last six months": ("Argent reçu et dépensé sur les six derniers mois", "Larzan rantre ek depanse dan sis dernie mwa"),
+"Export as CSV": ("Exporter en CSV", "Exporte an CSV"),
+"Nothing to export yet": ("Rien à exporter pour l'instant", "Nanye pou exporte ankor"),
+"Couldn't export. Try again.": ("Export impossible. Réessayez.", "Pa finn kapav exporte. Reseye."),
 "Copy all as CSV": ("Tout copier en CSV", "Kopie tou an CSV"),
 "Paste into a spreadsheet.": ("Collez-le dans un tableur.", "Koll li dan enn spreadsheet."),
 "Today": ("Aujourd'hui", "Zordi"),
@@ -581,6 +584,7 @@ P = [
 (r"^Enter how much (\w+) you got\.$", "Entrez combien de {1} vous avez reçu.", "Met komie {1} ou finn gagne."),
 (r"^Your items add up to (.+), more than this list's budget\.$", "Vos articles font {1}, plus que le budget de la liste.", "Ou bann zafer fer {1}, plis ki bidze lis-la."),
 (r"^(.+) added to (.+)\. Tap ✎ to change the price\.$", "{1} ajouté à {2}. Touchez ✎ pour changer le prix.", "{1} finn azoute dan {2}. Tap ✎ pou sanz pri-la."),
+(r"^Saved (my-money-.+\.csv)$", "Enregistré : {1}", "Finn anrezistre: {1}"),
 (r"^(\d+)% kept$", "{1} % gardé", "{1}% gard"),
 (r"^(\d+)% kept_$", "{1} % gardé", "{1}% gard"),
 ]

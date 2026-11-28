@@ -2038,10 +2038,24 @@
   $("setDone").addEventListener("click", closeSettings);
   $("sHome").addEventListener("change", () => $("sHomeNote").classList.toggle("hidden", $("sHome").value === home()));
   $("signOut").addEventListener("click", async () => { $("setOv").classList.remove("open"); await Vault.forget(); await sb.auth.signOut(); });
+  // Export every entry as a CSV file: the phone's share menu (save to Files, Drive, WhatsApp…) or a download on a computer.
   $("copyCsv").addEventListener("click", async () => {
-    const rows = [["date","type","amount","category","note"]].concat([...st.txs].sort((a, b) => a.date.localeCompare(b.date)).map(t => [t.date, t.type, t.amount, t.category, t.note || ""]));
-    const csv = rows.map(r => r.map(v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : v).join(",")).join("\n");
-    try { await navigator.clipboard.writeText(csv); toast("Copied " + plural(st.txs.length) + ". Paste into a spreadsheet."); } catch (e) { toast("Copy was blocked by the browser"); }
+    if (!st.txs.length) { toast("Nothing to export yet"); return; }
+    const rows = [["date", "type", "amount", "currency", "category", "note"]].concat([...st.txs].sort((a, b) => a.date.localeCompare(b.date)).map(t => [t.date, t.type, t.amount, home(), t.category, t.note || ""]));
+    const csv = "﻿" + rows.map(r => r.map(v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : v).join(",")).join("\r\n");
+    const name = "my-money-" + today() + ".csv";
+    const file = new File([csv], name, { type: "text/csv" });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); return; }
+    } catch (e) { if (e && e.name === "AbortError") return; }
+    try {
+      const url = URL.createObjectURL(file), a = document.createElement("a");
+      a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      toast("Saved " + name);
+    } catch (_) {
+      try { await navigator.clipboard.writeText(csv.slice(1)); toast("Copied " + plural(st.txs.length) + ". Paste into a spreadsheet."); } catch (e) { toast("Couldn't export. Try again."); }
+    }
   });
 
   /* ---------- misc ---------- */

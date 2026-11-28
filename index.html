@@ -27,35 +27,94 @@
     <h1 class="display" id="wTitle">Take Control<br>of Your Finances</h1>
     <p class="sub">Spend smart, save more,<br>reach your goals.</p>
     <div class="wart" aria-hidden="true">
-      <svg class="wsky" viewBox="0 0 360 320" preserveAspectRatio="xMidYMax slice">
-        <defs>
-          <linearGradient id="wSkyG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#CFE5EE"/><stop offset="0.55" stop-color="#EEE9DE"/><stop offset="0.8" stop-color="#F8DDBE"/></linearGradient>
-          <radialGradient id="wSunG" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#FFF6E3"/><stop offset="0.35" stop-color="#FFE7BF" stop-opacity="0.95"/><stop offset="1" stop-color="#FFE7BF" stop-opacity="0"/></radialGradient>
-        </defs>
-        <rect x="0" y="-400" width="360" height="720" fill="#CFE5EE"/><rect width="360" height="320" fill="url(#wSkyG)"/>
-        <g fill="#FFFFFF" opacity="0.75"><ellipse cx="70" cy="70" rx="38" ry="11"/><ellipse cx="92" cy="62" rx="22" ry="12"/><ellipse cx="270" cy="40" rx="30" ry="9"/><ellipse cx="288" cy="34" rx="16" ry="9"/></g>
-        <g fill="#FFFFFF" opacity="0.6"><ellipse cx="190" cy="-60" rx="34" ry="10"/><ellipse cx="60" cy="-150" rx="28" ry="9"/></g>
-        <circle cx="262" cy="196" r="78" fill="url(#wSunG)"/>
-        <circle cx="262" cy="196" r="20" fill="#FFF4DC"/>
-        <g fill="#BACFD8" opacity="0.75">
-          <rect x="150" y="150" width="16" height="96"/><rect x="170" y="128" width="12" height="118"/><rect x="186" y="160" width="20" height="86"/><rect x="210" y="138" width="14" height="108"/><rect x="214" y="118" width="6" height="22"/><rect x="228" y="168" width="22" height="78"/><rect x="282" y="146" width="18" height="100"/><rect x="304" y="170" width="24" height="76"/><rect x="332" y="156" width="16" height="90"/>
-        </g>
-        <g fill="#A3BCC7">
-          <rect x="120" y="186" width="26" height="60"/><rect x="196" y="194" width="30" height="52"/><rect x="250" y="182" width="22" height="64"/><rect x="296" y="198" width="34" height="48"/><rect x="336" y="190" width="24" height="56"/>
-        </g>
-        <path d="M0 210c22-10 40-8 56 2 14-12 34-14 48-4 10-6 22-6 30 2v36H0z" fill="#6FA77F"/>
-        <path d="M0 226c18-8 36-6 50 2 12-8 26-8 36 0v18H0z" fill="#4E8B63"/>
-      </svg>
-      <img class="wkid" src="icons/avatars/girl-brown.png" alt="" width="190" height="209">
-      <svg class="wledge" viewBox="0 0 360 190" preserveAspectRatio="xMidYMax slice">
-        <rect x="0" y="40" width="360" height="150" fill="#E7E1D8"/>
-        <rect x="0" y="34" width="360" height="12" rx="3" fill="#F3EFE9"/>
-        <rect x="0" y="46" width="360" height="4" fill="#D9D1C5"/>
-        <g fill="#2F7A52"><path d="M-6 190c4-40 18-66 40-80-8 26-12 52-10 80z"/><path d="M14 190c10-36 30-56 56-62-14 20-22 40-24 62z"/></g>
-        <g fill="#3E9467"><path d="M30 190c-2-30 6-52 24-70 0 24 2 46 8 70z"/><path d="M-10 190c10-22 26-34 46-36-10 12-16 24-18 36z"/></g>
-        <g fill="#2F7A52"><path d="M366 190c-4-38-16-62-36-76 6 24 10 50 8 76z"/><path d="M344 190c-8-30-24-48-46-54 12 18 18 36 20 54z"/></g>
-        <g fill="#4E9A6E"><path d="M326 190c2-28-4-48-18-64 0 22-2 42-8 64z"/></g>
-      </svg>
+<svg viewBox="0 0 360 440" preserveAspectRatio="xMidYMax slice" class="wscene">
+  <defs>
+    <linearGradient id="wsSky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#C9E2EC"/>
+      <stop offset="0.5" stop-color="#E9EAE2"/>
+      <stop offset="0.72" stop-color="#F8DEC0"/>
+      <stop offset="1" stop-color="#F6D2AE"/>
+    </linearGradient>
+    <radialGradient id="wsSun" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFF8E8"/>
+      <stop offset="0.3" stop-color="#FFE9C4" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#FFE3B8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="wsLedge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#EEE8DF"/>
+      <stop offset="1" stop-color="#DCD3C6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- sky, sun, clouds -->
+  <rect x="0" y="-400" width="360" height="840" fill="#C9E2EC"/>
+  <rect x="0" y="0" width="360" height="440" fill="url(#wsSky)"/>
+  <circle cx="286" cy="262" r="96" fill="url(#wsSun)"/>
+  <circle cx="286" cy="262" r="22" fill="#FFF5DE"/>
+  <g fill="#FFFFFF" opacity="0.7">
+    <ellipse cx="64" cy="70" rx="40" ry="11"/><ellipse cx="88" cy="61" rx="22" ry="12"/>
+    <ellipse cx="282" cy="44" rx="32" ry="9"/><ellipse cx="300" cy="37" rx="16" ry="9"/>
+    <ellipse cx="190" cy="-70" rx="34" ry="10"/>
+  </g>
+
+  <!-- far skyline -->
+  <g fill="#B8CDD6" opacity="0.8">
+    <rect x="96" y="214" width="14" height="96"/><rect x="114" y="192" width="12" height="118"/><rect x="118" y="174" width="4" height="20"/>
+    <rect x="130" y="226" width="20" height="84"/><rect x="224" y="204" width="16" height="106"/><rect x="244" y="186" width="12" height="124"/><rect x="248" y="166" width="4" height="22"/>
+    <rect x="260" y="230" width="22" height="80"/><rect x="304" y="214" width="18" height="96"/><rect x="326" y="236" width="22" height="74"/><rect x="350" y="220" width="14" height="90"/>
+  </g>
+  <!-- near skyline -->
+  <g fill="#9DB6C2">
+    <rect x="66" y="250" width="28" height="60"/><rect x="150" y="256" width="24" height="54"/><rect x="196" y="244" width="26" height="66"/>
+    <rect x="284" y="258" width="30" height="52"/><rect x="330" y="250" width="30" height="60"/>
+  </g>
+  <!-- trees behind the ledge -->
+  <path d="M0 276c18-14 40-14 56-2 12-12 32-14 46-4 8-5 18-5 26 2v40H0z" fill="#6FA680"/>
+  <path d="M0 292c16-10 34-8 48 2 12-8 26-8 36 2v16H0z" fill="#4E8B63"/>
+  <path d="M300 286c12-10 28-10 38-2 8-6 16-6 22-2v30h-60z" fill="#6FA680"/>
+
+  <!-- ledge -->
+  <rect x="0" y="312" width="360" height="128" fill="url(#wsLedge)"/>
+  <rect x="0" y="304" width="360" height="14" rx="3" fill="#F5F1EB"/>
+  <rect x="0" y="318" width="360" height="4" fill="#D3C9BB"/>
+
+  <!-- woman sitting on the ledge, looking at her phone -->
+  <g transform="translate(-14 0) translate(176 310) scale(1.28) translate(-176 -310)">
+    <!-- back leg (further) -->
+    <path d="M150 306 C170 300 196 286 214 276 C222 272 230 276 230 284 L236 304 L224 306 L216 290 C200 298 180 306 164 310 Z" fill="#22293F"/>
+    <!-- seat / hips -->
+    <path d="M124 308 C124 292 134 282 152 282 C164 282 172 288 172 298 L172 310 L124 310 Z" fill="#2B3550"/>
+    <!-- front leg: thigh up to knee, shin down to foot -->
+    <path d="M150 296 C172 284 198 268 216 260 C228 255 238 262 236 274 L242 304 L228 306 L222 278 C204 288 182 300 162 306 Z" fill="#2B3550"/>
+    <!-- shoes -->
+    <path d="M226 302 C234 300 246 300 252 304 C254 308 250 310 244 310 L226 310 Z" fill="#F5F1EB"/>
+    <path d="M226 302 C234 300 246 300 252 304" fill="none" stroke="#C9BFB2" stroke-width="1.2"/>
+    <!-- torso (green top), leaning towards the phone -->
+    <path d="M126 302 C122 270 126 240 138 222 C148 208 168 204 180 212 C192 220 198 240 196 262 C194 280 188 294 178 304 Z" fill="#3E7B5A"/>
+    <path d="M140 230 C150 256 160 280 176 302" fill="none" stroke="#356A4E" stroke-width="2" stroke-linecap="round"/>
+    <!-- hair falling down her back -->
+    <path d="M146 176 C136 182 130 200 130 222 C130 246 134 266 140 282 C150 278 156 262 158 244 C162 222 166 204 172 192 C168 182 156 174 146 176 Z" fill="#2A1D19"/>
+    <!-- arm: shoulder to elbow resting on knee, forearm up to the phone -->
+    <path d="M176 216 C188 226 198 246 206 262 C208 268 204 272 198 270 C192 258 182 240 172 228 Z" fill="#3E7B5A"/>
+    <path d="M200 262 C206 256 214 248 222 242 C226 240 230 244 228 248 C220 256 212 264 206 270 Z" fill="#9E6A47"/>
+    <!-- hand + phone -->
+    <rect x="221" y="226" width="12" height="20" rx="2.5" transform="rotate(18 227 236)" fill="#1C2233"/>
+    <rect x="223.3" y="228.6" width="7.4" height="14" rx="1.2" transform="rotate(18 227 236)" fill="#8FB3C6"/>
+    <ellipse cx="224" cy="244" rx="5" ry="4" fill="#9E6A47"/>
+    <!-- neck and head, tilted down towards the phone -->
+    <path d="M168 196 C172 200 176 206 178 212 L170 216 C166 210 162 204 160 200 Z" fill="#9E6A47"/>
+    <circle cx="170" cy="182" r="17" fill="#9E6A47"/>
+    <!-- hair over the head, face turned to the right -->
+    <path d="M154 186 C150 168 160 156 174 156 C186 156 192 166 190 176 C186 172 180 172 176 176 C172 182 166 190 160 196 C156 194 155 190 154 186 Z" fill="#2A1D19"/>
+    <path d="M186.5 181 C189 184 189 187 186.5 188" fill="none" stroke="#7C5136" stroke-width="1.3" stroke-linecap="round"/>
+  </g>
+
+  <!-- plants in front -->
+  <g fill="#2F7A52"><path d="M-6 440c4-56 20-92 46-112-10 36-14 74-12 112z"/><path d="M16 440c12-52 34-80 62-88-16 28-24 58-26 88z"/></g>
+  <g fill="#3E9467"><path d="M32 440c-2-42 8-74 28-98 0 34 2 66 10 98z"/><path d="M-10 440c12-30 30-48 54-52-12 18-18 34-20 52z"/></g>
+  <g fill="#2F7A52"><path d="M366 440c-4-54-18-88-40-108 8 34 12 70 10 108z"/><path d="M344 440c-10-42-28-68-52-76 14 26 20 52 22 76z"/></g>
+  <g fill="#4E9A6E"><path d="M326 440c2-40-4-68-20-90 0 32-2 60-10 90z"/></g>
+</svg>
     </div>
     <button class="btn primary wgo" type="button" id="wStart">Get Started <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
     <p class="wsign">Already have an account? <button type="button" class="linkbtn" id="wSignIn">Sign in</button></p>

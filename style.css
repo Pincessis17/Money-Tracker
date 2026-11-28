@@ -430,7 +430,7 @@ textarea { font: inherit; color: inherit; border: 1px solid var(--line); backgro
 /* welcome (first open on a device) */
 .welcome { width: 100%; display: grid; gap: 12px; padding-top: 6px; }
 .welcome ~ * { }
-body.welcoming #authView > :not(.welcome):not(.installslot) { display: none; }
+body.welcoming #authView > :not(.welcome):not(.installslot):not(.langbar) { display: none; }
 .wbrand { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--accent-ink); }
 .wlogo { width: 30px; height: 30px; border-radius: 10px; background: var(--accent); color: #fff; display: grid; place-items: center; }
 .welcome h1 { font-size: 34px; line-height: 1.1; margin: 10px 0 0; }
@@ -476,3 +476,7 @@ body.welcoming { background: linear-gradient(180deg, #D3EAF6 0%, #E0EDF3 55%, #F
 .budget .name { align-items: flex-start; }
 .budget.ended { opacity: .7; }
 .budget .name .dot { margin-top: 6px; flex: none; }
+
+/* language picker on the sign-in screens */
+.langbar { justify-self: end; display: flex; align-items: center; gap: 6px; color: var(--muted); margin: -12px 0 6px; position: relative; z-index: 3; }
+.langbar select { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; color: var(--ink); }

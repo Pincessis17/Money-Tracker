@@ -21,6 +21,7 @@
 <body class="signedout">
 
 <main id="authView" class="auth">
+  <div class="langbar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><select data-lang id="langAuth" aria-label="Language"></select></div>
   <div class="installslot" id="installSlotAuth"></div>
   <section class="welcome hidden" id="welcome" aria-labelledby="wTitle">
     <div class="wbrand"><span class="wlogo" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19c0-8 6-14 14-14 0 8-6 14-14 14z"/><path d="M5 19l7-7"/></svg></span>My Money</div>
@@ -319,6 +320,7 @@
     </div></div>
     <div><div class="sub sublbl">Avatar</div><div class="avpick" id="sAvatar"></div></div>
     <div><div class="sub sublbl">Skin tone</div><div class="skinpick" id="sSkin"></div></div>
+    <div class="field"><label for="sLang">Language</label><select data-lang id="sLang"></select></div>
     <div class="field"><label for="sHome">My currency</label><select id="sHome"></select>
       <div id="sHomeNote" class="sub hidden" style="margin-top:6px">Amounts you've already entered keep their numbers; only the currency label changes. Rates and conversions will use your new currency.</div></div>
     <div class="privacy">
@@ -560,6 +562,7 @@
 
 <div class="toast" id="toast" role="status"></div>
 
+<script src="i18n.js"></script>
 <script src="supabase.js"></script>
 <script src="config.js"></script>
 <script src="vault.js"></script>

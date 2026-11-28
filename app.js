@@ -20,7 +20,7 @@
   function ym(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); }
   function today() { const d = new Date(); return ym(d) + "-" + String(d.getDate()).padStart(2, "0"); }
   function shiftMonth(m, n) { const [y, mo] = m.split("-").map(Number); return ym(new Date(y, mo - 1 + n, 1)); }
-  function monthName(m, long) { const [y, mo] = m.split("-").map(Number); return (long ? new Date(y, mo-1, 1).toLocaleString("en-GB", { month: "long" }) : MONTHS[mo - 1]) + " " + y; }
+  function monthName(m, long) { const [y, mo] = m.split("-").map(Number); return new Date(y, mo - 1, 1).toLocaleDateString("en-GB", { month: long ? "long" : "short" }) + " " + y; }
   function money(n) { return (st.settings.currency || "Rs") + " " + (Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   function shortMoney(n) { if (n >= 1e6) return (n/1e6).toFixed(1).replace(/\.0$/,"") + "M"; if (n >= 1e3) return (n/1e3).toFixed(n >= 1e4 ? 0 : 1).replace(/\.0$/,"") + "k"; return String(Math.round(n)); }
   function plural(n) { return n + (n === 1 ? " entry" : " entries"); }
@@ -33,6 +33,18 @@
   function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
   function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 2400); }
   function banner(msg) { const b = $("banner"); b.textContent = msg || ""; b.classList.toggle("show", !!msg); }
+
+  /* ---------- language ---------- */
+  document.querySelectorAll("select[data-lang]").forEach(sel => {
+    sel.innerHTML = I18N.langs.map(([v, n]) => '<option value="' + v + '">' + n + '</option>').join("");
+    sel.value = I18N.lang;
+    sel.addEventListener("change", () => {
+      I18N.set(sel.value);
+      if (st.user && st.key) { st.settings.lang = sel.value; saveSettings().catch(() => {}); }
+    });
+  });
+  // Dates and anything built in code are redrawn in the new language.
+  window.onLangChange = () => { if (st.user && st.key) { applyLook(); render(); } };
 
   /* ---------- show / hide password ---------- */
   const EYE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
@@ -353,7 +365,9 @@
       else { legacySettings = true; d = { currency: set.data.currency, expense_cats: set.data.expense_cats, income_cats: set.data.income_cats, budgets: set.data.budgets, display_name: set.data.display_name, theme: set.data.theme, avatar: set.data.avatar, skin: set.data.skin }; }
       // Older accounts kept only a symbol: "Rs" means the Mauritian rupee.
       if (d) st.settings = { currency: d.currency || "Rs", expenseCats: d.expense_cats || clone(DEFAULTS.expenseCats), incomeCats: d.income_cats || clone(DEFAULTS.incomeCats), budgets: d.budgets || {},
-        name: d.display_name || "", theme: d.theme || "emerald", avatar: d.avatar || "girl", skin: d.skin || "brown", home: d.home || "MUR", look: d.look || 0 };
+        name: d.display_name || "", theme: d.theme || "emerald", avatar: d.avatar || "girl", skin: d.skin || "brown", home: d.home || "MUR", look: d.look || 0, lang: d.lang || "" };
+      // The language this person chose follows them to other phones.
+      if (d && d.lang && d.lang !== I18N.lang) I18N.set(d.lang, true);
       // Emerald became the default look: move every account to it once. People can switch back in Settings.
       if (d && !d.look) { st.settings.theme = "emerald"; st.settings.look = 2; saveSettings().catch(() => {}); }
     }
@@ -375,7 +389,7 @@
   }
   async function saveSettings() {
     await putEnc("settings", { currency: st.settings.currency, expense_cats: st.settings.expenseCats, income_cats: st.settings.incomeCats, budgets: st.settings.budgets || {},
-      display_name: st.settings.name || "", theme: st.settings.theme, avatar: st.settings.avatar, skin: st.settings.skin, home: home(), look: st.settings.look || 2 });
+      display_name: st.settings.name || "", theme: st.settings.theme, avatar: st.settings.avatar, skin: st.settings.skin, home: home(), look: st.settings.look || 2, lang: st.settings.lang || I18N.lang });
     st.hasSettingsRow = true;
   }
   let lastNowM = ym(new Date());
@@ -575,7 +589,7 @@
       const hi = Math.max(d.i > 0 ? 2 : 0, y(0) - y(d.i)), ho = Math.max(d.o > 0 ? 2 : 0, y(0) - y(d.o));
       svg += '<rect x="' + (cx - bw - 1) + '" y="' + (y(0) - hi) + '" width="' + bw + '" height="' + hi + '" rx="3" fill="var(--income)"><title>' + esc(monthName(d.m) + " in: " + money(d.i)) + '</title></rect>';
       svg += '<rect x="' + (cx + 1) + '" y="' + (y(0) - ho) + '" width="' + bw + '" height="' + ho + '" rx="3" fill="var(--expense)"><title>' + esc(monthName(d.m) + " spent: " + money(d.o)) + '</title></rect>';
-      svg += '<text x="' + cx + '" y="' + (H - 8) + '" text-anchor="middle" font-size="12" fill="' + (sel ? "var(--accent)" : "var(--muted)") + '" font-weight="' + (sel ? 700 : 500) + '">' + MONTHS[Number(d.m.slice(5)) - 1] + '</text>';
+      svg += '<text x="' + cx + '" y="' + (H - 8) + '" text-anchor="middle" font-size="12" fill="' + (sel ? "var(--accent)" : "var(--muted)") + '" font-weight="' + (sel ? 700 : 500) + '">' + monthName(d.m).split(" ")[0] + '</text>';
     });
     $("trend").innerHTML = svg + '</svg>';
   }

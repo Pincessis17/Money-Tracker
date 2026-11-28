@@ -635,6 +635,7 @@
     if (offline) syncState(); else { $("syncNote").textContent = "Synced " + new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }); syncState(); }
     render();
     runRepeats();
+    if (wantAdd) { wantAdd = false; setTimeout(openFromReminder, 400); }
   }
   async function saveSettings() {
     await putEnc("settings", { currency: st.settings.currency, expense_cats: st.settings.expenseCats, income_cats: st.settings.incomeCats, budgets: st.settings.budgets || {},
@@ -797,6 +798,67 @@
     $("repHint").classList.toggle("hidden", !ed.repeat);
     if (ed.repeat) $("repHint").textContent = everyText({ every: ed.repeat, start: d }) + ", starting " + new Date(d + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" }) + ". You can stop it in Plans.";
   }
+
+  /* ---------- daily reminder (a notification, even when the app is closed) ---------- */
+  const pushOK = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent), standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+  (() => { const sel = $("rTime"); for (let h = 6; h <= 23; h++) for (const m of ["00", "30"]) { const v = String(h).padStart(2, "0") + ":" + m; sel.add(new Option(v, v)); } sel.value = "20:00"; })();
+  function b64u(s) { const p = "=".repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(b, c => c.charCodeAt(0)); }
+  async function mySub() { try { const r = await navigator.serviceWorker.ready; return await r.pushManager.getSubscription(); } catch (_) { return null; } }
+  async function renderReminder() {
+    const on = $("rOn"), note = $("rNote");
+    if (!pushOK()) {
+      on.disabled = true; on.checked = false; $("rTimeRow").classList.add("hidden");
+      note.textContent = isIOS && !standalone ? "On iPhone, add My Money to your Home Screen first (Share → Add to Home Screen), then turn this on from there." : "This browser can't show reminders.";
+      return;
+    }
+    on.disabled = false;
+    const sub = await mySub();
+    let row = null;
+    if (sub) { const { data } = await sb.from("push_subs").select("remind_at").eq("endpoint", sub.endpoint).maybeSingle(); row = data; }
+    on.checked = !!row; $("rTimeRow").classList.toggle("hidden", !row);
+    if (row) $("rTime").value = row.remind_at;
+    note.textContent = Notification.permission === "denied" ? "Notifications are blocked for My Money. Allow them in your phone's settings to use this." :
+      row ? "Skipped on days you've already added something." : "";
+  }
+  async function saveReminder(sub) {
+    const j = sub.toJSON();
+    const row = { endpoint: sub.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, remind_at: $("rTime").value, tz: Intl.DateTimeFormat().resolvedOptions().timeZone || "Indian/Mauritius", lang: (window.I18N && I18N.lang) || "en", user_id: st.user.id };
+    const { error } = await sb.from("push_subs").upsert(row, { onConflict: "endpoint" });
+    if (error) throw error;
+  }
+  $("rOn").addEventListener("change", async () => {
+    const on = $("rOn");
+    try {
+      if (on.checked) {
+        const perm = await Notification.requestPermission();
+        if (perm !== "granted") { on.checked = false; return renderReminder(); }
+        const { data, error } = await sb.functions.invoke("push", { method: "GET" });
+        if (error || !data || !data.publicKey) throw error || new Error("no key");
+        const reg = await navigator.serviceWorker.ready;
+        const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(data.publicKey) });
+        await saveReminder(sub);
+        toast(T("Reminder on. See you at") + " " + $("rTime").value);
+      } else {
+        const sub = await mySub();
+        if (sub) { await sb.from("push_subs").delete().eq("endpoint", sub.endpoint); await sub.unsubscribe().catch(() => {}); }
+        toast(T("Reminder off"));
+      }
+    } catch (_) { on.checked = !on.checked; toast(netMsg()); }
+    renderReminder();
+  });
+  $("rTime").addEventListener("change", async () => { const sub = await mySub(); if (sub && $("rOn").checked) { try { await saveReminder(sub); toast(T("Reminder moved to") + " " + $("rTime").value); } catch (_) { toast(netMsg()); } } });
+  // Added something today: no reminder needed tonight.
+  let activeDay = "";
+  function markActive() {
+    const d = today(); if (activeDay === d || !st.user || !pushOK()) return; activeDay = d;
+    sb.from("push_subs").update({ last_active: d }).eq("user_id", st.user.id).then(() => {}, () => {});
+  }
+  // Tapping the reminder opens the expense form.
+  function openFromReminder() { if (st.key && !$("entryOv").classList.contains("open")) { showTab("home"); openEntry({ type: "expense" }); } }
+  if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", e => { if (e.data && e.data.type === "add-expense") openFromReminder(); });
+  let wantAdd = /[?&]add=expense/.test(location.search);
+  if (wantAdd) history.replaceState(null, "", location.pathname);
 
   /* ---------- gentle setup cards on Home (instead of forcing setup at sign-up) ---------- */
   let rcodeShown = false;
@@ -2207,6 +2269,7 @@
       const saved = { ...row, id: rule ? await occId(rule.id, row.date) : (ed.id || uuid()), created_at: prevTx ? prevTx.created_at : new Date().toISOString() };
       if (rule) saved.rep = rule.id; else if (prevTx && prevTx.rep) saved.rep = prevTx.rep;
       await putEnc("transactions", saved);
+      markActive();
       if (rule) { reps().push(rule); saveSettings().then(() => runRepeats()).catch(() => {}); }
       st.txs = ed.id ? st.txs.map(t => t.id === ed.id ? saved : t) : [saved, ...st.txs];
       const wasEdit = !!ed.id, planId = saved.type === "expense" ? ed.planId : null;
@@ -2320,6 +2383,7 @@
 
   /* ---------- settings ---------- */
   function renderSettings() {
+    renderReminder();
     const pwAcct = !!(st.vault && st.vault.pass && st.vault.pass.src === "password");
     $("openCp").classList.toggle("hidden", pwAcct);
     $("openRc").classList.toggle("hidden", !st.settings.rcode);
@@ -2405,7 +2469,8 @@
   }
   $("setDone").addEventListener("click", closeSettings);
   $("sHome").addEventListener("change", () => $("sHomeNote").classList.toggle("hidden", $("sHome").value === home()));
-  $("signOut").addEventListener("click", async () => { $("setOv").classList.remove("open"); await Vault.forget(); await sb.auth.signOut(); });
+  $("signOut").addEventListener("click", async () => { $("setOv").classList.remove("open");
+    try { const sub = await mySub(); if (sub) { await sb.from("push_subs").delete().eq("endpoint", sub.endpoint); await sub.unsubscribe(); } } catch (_) {} await Vault.forget(); await sb.auth.signOut(); });
   /* ---------- PDF statement (made on the phone, in the theme's colours) ---------- */
   const T = s => I18N.t(s);
   function loadScript(src) {

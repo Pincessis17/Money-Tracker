@@ -24,11 +24,13 @@ window.Vault = (() => {
     const base = await crypto.subtle.importKey("raw", te.encode(secret), "PBKDF2", false, ["deriveKey"]);
     return crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: ITER, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, ["wrapKey", "unwrapKey"]);
   }
-  async function wrapWith(dek, secret) {
+  async function wrapWith(dek, secret, src) {
     const salt = rand(16), iv = rand(12);
     const k = await kek(secret, salt);
     const w = await crypto.subtle.wrapKey("raw", dek, k, { name: "AES-GCM", iv });
-    return { alg: "pbkdf2-sha256/aes-gcm", iter: ITER, salt: b64(salt), iv: b64(iv), key: b64(w) };
+    const o = { alg: "pbkdf2-sha256/aes-gcm", iter: ITER, salt: b64(salt), iv: b64(iv), key: b64(w) };
+    if (src) o.src = src; // "password": this lock opens with the person's account password
+    return o;
   }
   async function unwrapWith(obj, secret, extractable) {
     const k = await kek(secret, unb64(obj.salt));
@@ -45,17 +47,30 @@ window.Vault = (() => {
     return s;
   }
 
-  async function create(passphrase) {
+  // opts.src = "password": the account password doubles as the passphrase. The key then stays
+  // re-wrappable on this phone, so a password reset here can move the lock to the new password.
+  async function create(passphrase, opts) {
+    opts = opts || {};
     const dek = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
     const code = newRecoveryCode();
-    const pass = await wrapWith(dek, normPass(passphrase));
+    const pass = await wrapWith(dek, normPass(passphrase), opts.src);
     const rec = await wrapWith(dek, normRec(code));
-    return { pass, rec, code, key: await lockDown(dek) };
+    return { pass, rec, code, key: opts.src === "password" ? dek : await lockDown(dek) };
   }
-  async function unlock(vaultRow, passphrase) { return unwrapWith(vaultRow.pass, normPass(passphrase), false); }
+  async function unlock(vaultRow, passphrase) {
+    const pw = vaultRow.pass && vaultRow.pass.src === "password";
+    return unwrapWith(vaultRow.pass, normPass(passphrase), pw);
+  }
+  // Lock the same data key with a new account password (needs a key unlocked on this phone).
+  async function rewrap(key, newPassword) { return wrapWith(key, normPass(newPassword), "password"); }
   async function recover(vaultRow, code, newPassphrase) {
     const dek = await unwrapWith(vaultRow.rec, normRec(code), true);
     return { pass: await wrapWith(dek, normPass(newPassphrase)), key: await lockDown(dek) };
+  }
+  // Recovery code -> the data key, re-locked with the account password.
+  async function recoverToPassword(vaultRow, code, password) {
+    const dek = await unwrapWith(vaultRow.rec, normRec(code), true);
+    return { pass: await wrapWith(dek, normPass(password), "password"), key: dek };
   }
   async function changePass(vaultRow, oldPassphrase, newPassphrase) {
     const dek = await unwrapWith(vaultRow.pass, normPass(oldPassphrase), true);
@@ -104,5 +119,5 @@ window.Vault = (() => {
     try { const db = await idb(); await new Promise((res) => { const t = db.transaction("k", "readwrite"); t.objectStore("k").clear(); t.oncomplete = res; t.onerror = res; }); } catch (_) {}
   }
 
-  return { create, unlock, recover, changePass, enc, dec, encBytes, decBytes, saveKey, loadKey, forget, normRec };
+  return { create, unlock, rewrap, recover, recoverToPassword, changePass, enc, dec, encBytes, decBytes, saveKey, loadKey, forget, normRec };
 })();

@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=49">
+<link rel="stylesheet" href="style.css?v=50">
 <script>try{var t=localStorage.getItem("mm-theme");if(["sky","blush","emerald","ember","midnight","onyx"].indexOf(t)>-1)document.documentElement.dataset.theme=t;}catch(e){}</script>
 </head>
 <body class="signedout">
@@ -45,6 +45,7 @@
     <div class="ordiv hidden" id="aOr"><span>or use your email</span></div>
     <div class="field"><label for="aEmail">Email</label><input id="aEmail" type="email" autocomplete="email" inputmode="email" required></div>
     <div class="field"><label for="aPass">Password</label><input id="aPass" type="password" autocomplete="current-password" minlength="6" required></div>
+    <p class="sub hidden pwhint" id="aPwHint">This password also keeps your money records private, so choose one you'll remember.</p>
     <button type="button" class="linkbtn forgot" id="aForgot">Forgot password?</button>
     <div class="err" id="aErr" role="alert"></div>
     <div class="ok" id="aOk" role="status"></div>
@@ -103,16 +104,16 @@
   </div>
 
   <form class="card authcard hidden" id="vUnlock" novalidate>
-    <div class="authhead"><h1 class="display">Unlock your records</h1><p class="sub">Enter your passphrase. You only need to do this once on each phone.</p></div>
-    <div class="field"><label for="vPass">Passphrase</label><input id="vPass" type="password" autocomplete="current-password"></div>
+    <div class="authhead"><h1 class="display">Unlock your records</h1><p class="sub" id="vUnlockSub">Enter your passphrase. You only need to do this once on each phone.</p></div>
+    <div class="field"><label for="vPass" id="vPassLbl">Passphrase</label><input id="vPass" type="password" autocomplete="current-password"></div>
     <button class="btn primary" type="submit" id="vUnlockBtn">Unlock</button>
     <button class="switch" type="button" id="vForgot">Forgot it? Use your recovery code</button>
   </form>
 
   <form class="card authcard hidden" id="vRecover" novalidate>
-    <div class="authhead"><h1 class="display">Use your recovery code</h1><p class="sub">Enter the code you saved, then choose a new passphrase.</p></div>
+    <div class="authhead"><h1 class="display">Use your recovery code</h1><p class="sub">Enter the code you saved.</p></div>
     <div class="field"><label for="vRecCode">Recovery code</label><input id="vRecCode" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX"></div>
-    <div class="field"><label for="vRecNew">New passphrase</label><input id="vRecNew" type="password" autocomplete="new-password" placeholder="At least 8 characters"></div>
+    <div class="field"><label for="vRecNew" id="vRecNewLbl">New passphrase</label><input id="vRecNew" type="password" autocomplete="new-password" placeholder="At least 8 characters"></div>
     <button class="btn primary" type="submit" id="vRecBtn">Unlock with recovery code</button>
     <button class="switch" type="button" id="vBack">Back</button>
   </form>
@@ -150,6 +151,7 @@
       <button type="button" data-q="impBtn"><span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span>Import</button>
     </nav>
 
+    <div id="setupCards"></div>
     <div id="dueAlert"></div>
 
     <section class="card io">
@@ -394,8 +396,9 @@
     <div class="field"><label for="sHome">My currency</label><select id="sHome"></select>
       <div id="sHomeNote" class="sub hidden" style="margin-top:6px">Amounts you've already entered keep their numbers; only the currency label changes. Rates and conversions will use your new currency.</div></div>
     <div class="privacy">
-      <div><b>Encrypted</b><span class="sub">Your records are locked on your phone before they're saved. Only your passphrase or recovery code can open them.</span></div>
+      <div><b>Encrypted</b><span class="sub" id="sPrivSub">Your records are locked on your phone before they're saved. Only your passphrase or recovery code can open them.</span></div>
       <button type="button" class="pillbtn" id="openCp">Change passphrase</button>
+      <button type="button" class="pillbtn hidden" id="openRc">Recovery code</button>
     </div>
     <div><div class="sub" style="margin-bottom:6px">Expense categories</div><div class="catlist" id="sExp"></div></div>
     <div><div class="sub" style="margin-bottom:6px">Money-in categories</div><div class="catlist" id="sInc"></div></div>
@@ -642,10 +645,10 @@
   <div class="wbskip">Tap to skip</div>
   <div class="wbbar"><i></i></div>
 </div>
-<script src="i18n.js?v=49"></script>
+<script src="i18n.js?v=50"></script>
 <script src="supabase.js"></script>
-<script src="config.js?v=49"></script>
-<script src="vault.js?v=49"></script>
-<script src="app.js?v=49"></script>
+<script src="config.js?v=50"></script>
+<script src="vault.js?v=50"></script>
+<script src="app.js?v=50"></script>
 </body>
 </html>

@@ -74,6 +74,10 @@
 
   /* ---------- auth ---------- */
   let signUpMode = false;
+  // The password typed at sign-up or log-in. It also locks the person's records, so we keep it
+  // in memory only until the records are open (never saved anywhere).
+  let loginPass = null, loginPassT = null;
+  function holdPass(pw) { loginPass = pw; clearTimeout(loginPassT); loginPassT = setTimeout(() => { loginPass = null; }, 15 * 60 * 1000); }
   // The last person who used the app on this phone (their look only, nothing private).
   function knownUser() { try { return { name: localStorage.getItem("mm-name") || "", avatar: localStorage.getItem("mm-avatar") || "" }; } catch (_) { return { name: "", avatar: "" }; } }
   function setAuthMode(up) {
@@ -82,6 +86,7 @@
     $("authTitle").textContent = up ? "Create your account" : "Welcome back" + (k.name ? ", " + k.name : "");
     $("aNotMe").classList.toggle("hidden", up || !k.avatar);
     $("aForgot").classList.toggle("hidden", up);
+    $("aPwHint").classList.toggle("hidden", !up);
     let p = null; try { p = JSON.parse(localStorage.getItem("mm-pic") || "null"); } catch (_) {}
     const a = k.avatar.split("|");
     showPic($("authAvatar"), !up && p && p.src ? p : { src: !up && a[0] ? avatarSrc(a[0], a[1]) : "icons/avatars/girl-brown.png", img: false });
@@ -176,24 +181,27 @@
     const email = $("aEmail").value.trim(), password = $("aPass").value;
     $("aErr").textContent = ""; $("aOk").textContent = ""; $("aResend").classList.add("hidden");
     if (!/^\S+@\S+\.\S+$/.test(email)) return ($("aErr").textContent = "Enter a valid email address.");
-    if (password.length < 6) return ($("aErr").textContent = "Password needs at least 6 characters.");
+    if (password.length < (signUpMode ? 8 : 6)) return ($("aErr").textContent = signUpMode ? "Use at least 8 characters. This password also locks your records." : "Password needs at least 6 characters.");
     $("aSubmit").disabled = true;
     const label = $("aSubmit").textContent;
     $("aSubmit").textContent = signUpMode ? "Creating your account…" : "Logging in…";
     const withTimeout = (p) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 20000))]);
     try {
       if (signUpMode) {
+        holdPass(password);
         const { data, error } = await withTimeout(sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } }));
         if (error) throw error;
         if (!data.session) showCode(email);
       } else {
+        holdPass(password); // only kept if the log-in works (cleared just below otherwise)
         const { error } = await withTimeout(sb.auth.signInWithPassword({ email, password }));
-        if (error) throw error;
+        if (error) { loginPass = null; throw error; }
         try { localStorage.setItem("mm-has-account", "1"); } catch (_) {}
       }
     } catch (err) {
       const m = (err && err.message) || "";
       if (/confirm/i.test(m)) {
+        holdPass(password);
         // Not confirmed yet: send a fresh code and ask for it right here.
         await sb.auth.resend({ type: "signup", email, options: { emailRedirectTo: location.origin + location.pathname } }).catch(() => {});
         showCode(email, "Your email isn't confirmed yet. We've sent a code to " + email + ". Type it below to finish.");
@@ -257,6 +265,7 @@
       if (v.error) throw v.error;
       const u = await sb.auth.updateUser({ password: pw });
       if (u.error) throw u.error;
+      syncVaultPass(pw);
       showReset(false); $("rPass").value = "";
       toast("Password changed. You're logged in.");
     } catch (err) {
@@ -276,6 +285,7 @@
     const { error } = await sb.auth.updateUser({ password: pw });
     $("pwSave").disabled = false;
     if (error) { $("pwErr").textContent = /same.*password|different from the old/i.test(error.message || "") ? "Choose a password that's different from your old one." : "Couldn't save. Try again."; return; }
+    syncVaultPass(pw);
     $("pwOv").classList.remove("open"); $("pwNew").value = ""; toast("Password changed");
   });
 
@@ -288,7 +298,7 @@
     st.user = u;
     document.body.classList.toggle("signedout", !u);
     if (u) { $("aPass").value = ""; hideCode(); showWelcome(false); $("resetForm").classList.add("hidden"); $("authForm").classList.remove("hidden"); try { localStorage.setItem("mm-has-account", "1"); } catch (_) {} startVault(); }
-    else { if ($("welcome").classList.contains("hidden") && !signUpMode) setAuthMode(false); st.key = null; st.vault = null; st.lists = []; localFor = null; outbox = []; cache = null; document.body.classList.remove("locked"); st.track = []; st.holds = []; st.txs = []; st.plans = []; st.settings = clone(DEFAULTS); }
+    else { if ($("welcome").classList.contains("hidden") && (!signUpMode || _evt === "SIGNED_OUT")) { setAuthMode(false); hideCode(); } st.key = null; st.vault = null; st.lists = []; loginPass = null; syncPw = null; localFor = null; outbox = []; cache = null; document.body.classList.remove("locked"); st.track = []; st.holds = []; st.txs = []; st.plans = []; st.settings = clone(DEFAULTS); }
   });
 
   function storedUser() {
@@ -335,7 +345,7 @@
   let outbox = [], cache = null, flushing = null;
   // A login that couldn't refresh offline makes the server refuse a change; that's "try later", not "throw away".
   const isRetry = e => isNetErr(e) || /JWT|401|403|row-level security|42501|PGRST301/i.test(String((e && (e.message || e.code || e.status)) || e || "") + " " + String(e && e.code || ""));
-  const haveSession = () => sb.auth.getSession().then(r => !!(r.data && r.data.session), () => false);
+  const haveSession = async () => { try { const r = await sb.auth.getSession(); return !!(r.data && r.data.session); } catch (_) { return false; } };
   const isNetErr = e => navigator.onLine === false || /fetch|network|load failed|timed? ?out|NetworkError/i.test(String((e && (e.message || e.name)) || e || ""));
   function applyOp(rows, o) {
     if (!rows) return;
@@ -396,6 +406,10 @@
   window.addEventListener("offline", () => syncState());
   function vaultMode(mode) {
     document.body.classList.add("locked");
+    const pw = !!(st.vault && st.vault.pass && st.vault.pass.src === "password");
+    $("vUnlockSub").textContent = pw ? "Type the password you log in with. If you changed it on another phone, use your old one, or your recovery code." : "Enter your passphrase. You only need to do this once on each phone.";
+    $("vPassLbl").textContent = pw ? "Password" : "Passphrase";
+    $("vRecNewLbl").textContent = pw ? "Your current login password" : "New passphrase";
     ["vSetup", "vCode", "vUnlock", "vRecover"].forEach(id => $(id).classList.toggle("hidden", id !== mode));
     $("vErr").textContent = "";
     const f = { vSetup: "vNew1", vUnlock: "vPass", vRecover: "vRecCode" }[mode];
@@ -413,10 +427,44 @@
     }
     if (data) idb.set("vault-" + uid, data);
     st.vault = data;
-    if (!data) return vaultMode("vSetup");
+    if (!data) {
+      // New account: lock the records with the password they just chose. No extra passphrase step.
+      if (loginPass) {
+        $("syncNote").textContent = "Setting up…";
+        try {
+          const v = await Vault.create(loginPass, { src: "password" });
+          const { error: e2 } = await sb.from("vault").insert({ pass: v.pass, rec: v.rec });
+          if (e2) throw e2;
+          st.vault = { pass: v.pass, rec: v.rec };
+          st.newRcode = v.code;
+          return vaultReady(v.key);
+        } catch (_) { /* fall back to choosing a passphrase */ }
+      }
+      return vaultMode("vSetup");
+    }
     const k = await Vault.loadKey(st.user.id);
-    if (k) { st.key = k; document.body.classList.remove("locked"); return loadAll(); }
+    if (k) { st.key = k; document.body.classList.remove("locked"); await loadAll(); return syncVaultPass(syncPw || loginPass); }
+    // A new phone: try the password they just logged in with.
+    if (loginPass) { try { return vaultReady(await Vault.unlock(data, loginPass)); } catch (_) {} }
     vaultMode("vUnlock");
+  }
+  // Keep "password opens the records" true after a password change. Only for accounts set up that way,
+  // and only when the records are already open on this phone.
+  let syncPw = null;
+  async function syncVaultPass(pw) {
+    loginPass = null;
+    pw = pw || syncPw;
+    if (!pw) return;
+    // Records not open yet (e.g. a password reset on a phone that was logged out): finish once they are.
+    if (!st.key || !st.vault) { syncPw = pw; return; }
+    syncPw = null;
+    if (!st.vault.pass || st.vault.pass.src !== "password") return;
+    try { await Vault.unlock(st.vault, pw); return; } catch (_) {}
+    try {
+      const pass = await Vault.rewrap(st.key, pw);
+      const { error } = await sb.from("vault").update({ pass, updated_at: new Date().toISOString() }).eq("user_id", st.user.id);
+      if (!error) { st.vault.pass = pass; idb.set("vault-" + st.user.id, st.vault); }
+    } catch (_) {}
   }
   async function vaultReady(key) {
     st.key = key;
@@ -424,8 +472,10 @@
     $("vPass").value = ""; $("vNew1").value = ""; $("vNew2").value = ""; $("vRecCode").value = ""; $("vRecNew").value = "";
     document.body.classList.remove("locked");
     await loadAll();
-    // A brand-new account: ask for a name, look and currency before anything else.
-    if (st.welcome) { st.welcome = false; openSettings(true); }
+    st.welcome = false;
+    // A brand-new account: keep the recovery code (encrypted, like everything else) so Home can show it.
+    if (st.newRcode) { st.settings.rcode = st.newRcode; st.settings.rsaved = false; st.newRcode = null; saveSettings().catch(() => {}); render(); }
+    syncVaultPass(syncPw || loginPass);
   }
   const passProblem = (a, b) => a.length < 8 ? "Use at least 8 characters. A few random words works well." : a !== b ? "The two passphrases don't match." : "";
   $("vSetup").addEventListener("submit", async e => {
@@ -460,10 +510,11 @@
   $("vRecover").addEventListener("submit", async e => {
     e.preventDefault();
     const np = $("vRecNew").value;
-    if (np.length < 8) { $("vErr").textContent = "Your new passphrase needs at least 8 characters."; return; }
+    if (np.length < (st.vault && st.vault.pass && st.vault.pass.src === "password" ? 6 : 8)) { $("vErr").textContent = "Your new passphrase needs at least 8 characters."; return; }
     $("vRecBtn").disabled = true; $("vRecBtn").textContent = "Checking…";
     try {
-      const r = await Vault.recover(st.vault, $("vRecCode").value, np);
+      const pwAcct = st.vault.pass && st.vault.pass.src === "password";
+      const r = pwAcct ? await Vault.recoverToPassword(st.vault, $("vRecCode").value, np) : await Vault.recover(st.vault, $("vRecCode").value, np);
       const { error } = await sb.from("vault").update({ pass: r.pass, updated_at: new Date().toISOString() }).eq("user_id", st.user.id);
       if (error) throw error;
       st.vault.pass = r.pass;
@@ -471,6 +522,7 @@
     } catch (err) { $("vErr").textContent = err && err.name === "OperationError" ? "That recovery code isn't right. Check each letter and try again." : "Couldn't save your new passphrase. Check your connection."; }
     finally { $("vRecBtn").disabled = false; $("vRecBtn").textContent = "Unlock with recovery code"; }
   });
+  $("openRc").addEventListener("click", async () => { st.settings.rsaved = false; rcodeShown = true; await closeSettings(); showTab("home"); render(); setTimeout(() => { const c = $("scCode"); if (c) c.scrollIntoView({ behavior: "smooth", block: "center" }); }, 120); });
   $("openCp").addEventListener("click", () => { ["cpOld", "cpNew1", "cpNew2"].forEach(id => $(id).value = ""); $("cpErr").textContent = ""; $("cpOv").classList.add("open"); setTimeout(() => $("cpOld").focus(), 50); });
   $("cpCancel").addEventListener("click", () => $("cpOv").classList.remove("open"));
   $("cpOv").addEventListener("click", e => { if (e.target === $("cpOv")) $("cpOv").classList.remove("open"); });
@@ -551,7 +603,8 @@
       else { legacySettings = true; d = { currency: set.data.currency, expense_cats: set.data.expense_cats, income_cats: set.data.income_cats, budgets: set.data.budgets, display_name: set.data.display_name, theme: set.data.theme, avatar: set.data.avatar, skin: set.data.skin }; }
       // Older accounts kept only a symbol: "Rs" means the Mauritian rupee.
       if (d) st.settings = { currency: d.currency || "Rs", expenseCats: d.expense_cats || clone(DEFAULTS.expenseCats), incomeCats: d.income_cats || clone(DEFAULTS.incomeCats), budgets: d.budgets || {},
-        name: d.display_name || "", theme: d.theme || "emerald", avatar: d.avatar || "girl", skin: d.skin || "brown", home: d.home || "MUR", look: d.look || 0, lang: d.lang || "", pic: d.pic || "", photo: d.photo || "" };
+        name: d.display_name || "", theme: d.theme || "emerald", avatar: d.avatar || "girl", skin: d.skin || "brown", home: d.home || "MUR", look: d.look || 0, lang: d.lang || "", pic: d.pic || "", photo: d.photo || "",
+        rcode: d.rcode || "", rsaved: !!d.rsaved, skipSetup: !!d.skipSetup };
       // The language this person chose follows them to other phones.
       if (d && d.lang && d.lang !== I18N.lang) I18N.set(d.lang, true);
       // Emerald became the default look: move every account to it once. People can switch back in Settings.
@@ -575,7 +628,8 @@
   }
   async function saveSettings() {
     await putEnc("settings", { currency: st.settings.currency, expense_cats: st.settings.expenseCats, income_cats: st.settings.incomeCats, budgets: st.settings.budgets || {},
-      display_name: st.settings.name || "", theme: st.settings.theme, avatar: st.settings.avatar, skin: st.settings.skin, home: home(), look: st.settings.look || 2, lang: st.settings.lang || I18N.lang, pic: st.settings.pic || "", photo: st.settings.photo || "" });
+      display_name: st.settings.name || "", theme: st.settings.theme, avatar: st.settings.avatar, skin: st.settings.skin, home: home(), look: st.settings.look || 2, lang: st.settings.lang || I18N.lang, pic: st.settings.pic || "", photo: st.settings.photo || "",
+      rcode: st.settings.rcode || "", rsaved: !!st.settings.rsaved, skipSetup: !!st.settings.skipSetup });
     st.hasSettingsRow = true;
   }
   let lastNowM = ym(new Date());
@@ -662,7 +716,38 @@
       '<span class="amt num ' + (inc ? "in" : "out") + '">' + (inc ? "+" : "−") + esc(money(t.amount)) + '</span></button>';
   }
 
+  /* ---------- gentle setup cards on Home (instead of forcing setup at sign-up) ---------- */
+  let rcodeShown = false;
+  function renderSetupCards() {
+    const s = st.settings, out = [];
+    if (st.key && s.rcode && !s.rsaved) {
+      out.push('<section class="card setupcard" aria-labelledby="scR"><div class="schead"><span class="scic" aria-hidden="true">' +
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>' +
+        '<div><b id="scR">Save your recovery code</b><p class="sub">If you ever forget your password, this code is the only way to open your records. Write it down somewhere safe.</p></div></div>' +
+        '<div class="reccode num' + (rcodeShown ? "" : " blur") + '" id="scCode">' + esc(rcodeShown ? s.rcode : "XXXX-XXXX-XXXX-XXXX-XXXX") + '</div>' +
+        '<div class="scbtns">' + (rcodeShown ? '<button type="button" class="btn" data-sc="copy">Copy</button><button type="button" class="btn primary" data-sc="saved">I\'ve saved it</button>'
+          : '<button type="button" class="btn primary" data-sc="show">Show code</button>') + '</div></section>');
+    }
+    if (st.key && !s.name && !s.skipSetup) {
+      out.push('<section class="card setupcard" aria-labelledby="scP"><div class="schead"><img class="scav" src="' + esc(picOf(s).src) + '" alt="">' +
+        '<div><b id="scP">Make it yours</b><p class="sub">Add your name and picture, and choose your currency and colours.</p></div>' +
+        '<button type="button" class="iconb scx" data-sc="skip" aria-label="Not now">✕</button></div>' +
+        '<div class="scbtns"><button type="button" class="btn primary" data-sc="profile">Set up my profile</button></div></section>');
+    }
+    $("setupCards").innerHTML = out.join("");
+  }
+  $("setupCards").addEventListener("click", async e => {
+    const b = e.target.closest("[data-sc]"); if (!b) return;
+    const a = b.dataset.sc;
+    if (a === "show") { rcodeShown = true; renderSetupCards(); }
+    else if (a === "copy") { try { await navigator.clipboard.writeText(st.settings.rcode); toast("Recovery code copied"); } catch (_) { toast("Copy was blocked. Write it down instead."); } }
+    else if (a === "saved") { st.settings.rsaved = true; rcodeShown = false; renderSetupCards(); saveSettings().catch(() => {}); toast("Kept safe. You can see it again in Settings."); }
+    else if (a === "profile") openSettings(true);
+    else if (a === "skip") { st.settings.skipSetup = true; renderSetupCards(); saveSettings().catch(() => {}); }
+  });
+
   function render() {
+    renderSetupCards();
     document.querySelectorAll(".curLbl").forEach(e => e.textContent = st.settings.currency);
     $("monthLabel").textContent = monthName(st.month, true);
     const nowM = ym(new Date());
@@ -2141,6 +2226,10 @@
 
   /* ---------- settings ---------- */
   function renderSettings() {
+    const pwAcct = !!(st.vault && st.vault.pass && st.vault.pass.src === "password");
+    $("openCp").classList.toggle("hidden", pwAcct);
+    $("openRc").classList.toggle("hidden", !st.settings.rcode);
+    $("sPrivSub").textContent = pwAcct ? "Your records are locked on your phone before they're saved. Only your password or recovery code can open them." : "Your records are locked on your phone before they're saved. Only your passphrase or recovery code can open them.";
     $("sHome").innerHTML = CCY.map(c => '<option value="' + c.ccy + '">' + esc(c.ccy + " · " + c.name) + '</option>').join("");
     $("sHome").value = home(); $("sHomeNote").classList.add("hidden");
     $("sName").value = st.settings.name || "";

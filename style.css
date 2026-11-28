@@ -638,3 +638,4 @@ body.welcoming { background: linear-gradient(180deg, #D3EAF6 0%, #E0EDF3 55%, #F
 .themegrid button[aria-pressed="true"] .tprev { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow); }
 .themegrid button[aria-pressed="true"] span.tn::before { content: "✓ "; color: var(--accent-ink); }
 #themeOv { z-index: 60; }
+#stmOv { z-index: 60; } .pagehead .pillbtn { display: inline-flex; align-items: center; gap: 6px; }

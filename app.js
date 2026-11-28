@@ -2038,24 +2038,241 @@
   $("setDone").addEventListener("click", closeSettings);
   $("sHome").addEventListener("change", () => $("sHomeNote").classList.toggle("hidden", $("sHome").value === home()));
   $("signOut").addEventListener("click", async () => { $("setOv").classList.remove("open"); await Vault.forget(); await sb.auth.signOut(); });
-  // Export every entry as a CSV file: the phone's share menu (save to Files, Drive, WhatsApp…) or a download on a computer.
-  $("copyCsv").addEventListener("click", async () => {
-    if (!st.txs.length) { toast("Nothing to export yet"); return; }
-    const rows = [["date", "type", "amount", "currency", "category", "note"]].concat([...st.txs].sort((a, b) => a.date.localeCompare(b.date)).map(t => [t.date, t.type, t.amount, home(), t.category, t.note || ""]));
-    const csv = "﻿" + rows.map(r => r.map(v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : v).join(",")).join("\r\n");
-    const name = "my-money-" + today() + ".csv";
-    const file = new File([csv], name, { type: "text/csv" });
+  /* ---------- PDF statement (made on the phone, in the theme's colours) ---------- */
+  const T = s => I18N.t(s);
+  function loadScript(src) {
+    return new Promise((ok, no) => { if (document.querySelector('script[src="' + src + '"]')) return ok(); const e = document.createElement("script"); e.src = src; e.onload = ok; e.onerror = no; document.head.appendChild(e); });
+  }
+  async function loadPdfLibs() {
+    await loadScript("vendor/jspdf.umd.min.js");
+    await loadScript("vendor/jspdf.plugin.autotable.min.js");
+    await loadScript("vendor/pdf-fonts.js");
+  }
+  // Turns any CSS colour into [r, g, b].
+  function rgb(c, fallback) {
+    const cv = rgb.cv || (rgb.cv = document.createElement("canvas").getContext("2d"));
+    cv.fillStyle = "#000"; cv.fillStyle = (c || "").trim() || fallback;
+    const v = cv.fillStyle;
+    if (v[0] === "#") return [1, 3, 5].map(k => parseInt(v.slice(k, k + 2), 16));
+    const m = v.match(/[\d.]+/g) || [0, 0, 0]; return m.slice(0, 3).map(Number);
+  }
+  const mix = (a, b, t) => a.map((x, k) => Math.round(x * (1 - t) + b[k] * t));
+  function themeColors() {
+    const cs = getComputedStyle(document.documentElement), v = n => cs.getPropertyValue(n);
+    const white = [255, 255, 255], band = rgb(v("--tab-a"), "#0F5C41"), accent = rgb(v("--ring-b"), "#0F6B4B");
+    const dark = (band[0] * 299 + band[1] * 587 + band[2] * 114) / 1000 < 60;
+    return {
+      band, bandSub: rgb(v("--hero-sub"), "#CDEBDD"), accent, accentLight: rgb(v("--ring-a"), "#8BD95A"),
+      soft: mix(accent, white, 0.88), zebra: mix(accent, white, 0.96), chipText: dark ? mix(accent, [0, 0, 0], 0.35) : band,
+      ink: [24, 32, 30], muted: [104, 118, 112], line: [228, 233, 230], good: [30, 138, 85], bad: [179, 64, 47]
+    };
+  }
+  // Characters the PDF font doesn't have.
+  const pdfText = x => String(x).replace(/GH₵/g, "GH¢").replace(/₵/g, "¢").replace(/₦/g, "NGN ").replace(/[✓✔]/g, "").replace(/\s+$/, "");
+  async function tintedWallet() {
     try {
-      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); return; }
-    } catch (e) { if (e && e.name === "AbortError") return; }
+      const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = "icons/wallet.png"; });
+      const c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
+      const ctx = c.getContext("2d"), f = getComputedStyle(document.documentElement).getPropertyValue("--wallet").trim();
+      if (f && f !== "none") ctx.filter = f;
+      ctx.drawImage(img, 0, 0); return c.toDataURL("image/png");
+    } catch (_) { return null; }
+  }
+  function stmRange(p) {
+    const now = ym(new Date()), t = today();
+    const monthEnd = m => { const [y, mo] = m.split("-").map(Number); return m + "-" + String(new Date(y, mo, 0).getDate()).padStart(2, "0"); };
+    if (p === "this") return { s: now + "-01", e: monthEnd(now), label: monthName(now, true) };
+    if (p === "last") { const m = shiftMonth(now, -1); return { s: m + "-01", e: monthEnd(m), label: monthName(m, true) }; }
+    if (p === "all") {
+      const ds = st.txs.map(x => x.date).filter(Boolean).sort();
+      return { s: ds[0] || t, e: ds[ds.length - 1] > t ? ds[ds.length - 1] : t, label: T("All time") };
+    }
+    const a = $("stmFrom").value, b = $("stmTo").value;
+    if (!a || !b || b < a) return null;
+    return { s: a, e: b, label: null };
+  }
+  const longDate = d => new Date(d + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  const shortDate = d => new Date(d + "T12:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+
+  async function makeStatement(r) {
+    await loadPdfLibs();
+    const { jsPDF } = window.jspdf, doc = new jsPDF({ unit: "mm", format: "a4" });
+    doc.addFileToVFS("pop-r.ttf", window.PDF_FONTS.r); doc.addFont("pop-r.ttf", "Pop", "normal");
+    doc.addFileToVFS("pop-b.ttf", window.PDF_FONTS.b); doc.addFont("pop-b.ttf", "Pop", "bold");
+    const C = themeColors(), W = 210, M = 14, CW = W - 2 * M;
+    const period = r.label || (longDate(r.s) + " – " + longDate(r.e));
+    const range = longDate(r.s) + " – " + longDate(r.e);
+    const tx = st.txs.filter(x => x.date >= r.s && x.date <= r.e).sort((a, b) => a.date.localeCompare(b.date) || (a.created_at || "").localeCompare(b.created_at || ""));
+    const tin = tx.filter(x => x.type === "income").reduce((a, x) => a + x.amount, 0), tout = tx.filter(x => x.type !== "income").reduce((a, x) => a + x.amount, 0);
+    const left = tin - tout, kept = tin > 0 ? Math.max(0, Math.round(left / tin * 100)) : null;
+    const M$ = n => pdfText(money(n)), name = st.settings.name || "";
+    const txt = (str, x, y, o) => doc.text(pdfText(str), x, y, o);
+
+    // header band with the wallet
+    doc.setFillColor(...C.band); doc.roundedRect(M, M, CW, 36, 4, 4, "F");
+    const wallet = await tintedWallet();
+    if (wallet) doc.addImage(wallet, "PNG", W - M - 46, M + 2, 32, 32);
+    doc.setFillColor(255, 255, 255); doc.roundedRect(M + 6, M + 6, 7, 7, 2, 2, "F");
+    doc.setFont("Pop", "bold"); doc.setFontSize(9); doc.setTextColor(...C.band); doc.text("M", M + 9.5, M + 11.4, { align: "center" });
+    doc.setFont("Pop", "bold"); doc.setFontSize(10); doc.setTextColor(...C.bandSub); txt("My Money", M + 15.5, M + 11.2);
+    doc.setFontSize(18); doc.setTextColor(255, 255, 255); txt(T("Money statement"), M + 6, M + 23);
+    doc.setFont("Pop", "normal"); doc.setFontSize(9.5); doc.setTextColor(...C.bandSub); txt(r.label ? period : range, M + 6, M + 30);
+    doc.setFontSize(8.5); const rx = W - M - 50;
+    doc.setFont("Pop", "bold"); doc.setTextColor(255, 255, 255); txt(name, rx, M + 10, { align: "right" });
+    doc.setFont("Pop", "normal"); doc.setTextColor(...C.bandSub);
+    txt(T(ccyMeta(home()).name) + " (" + home() + ")", rx, M + 15.5, { align: "right" });
+    txt(T("Made on") + " " + longDate(today()), rx, M + 21, { align: "right" });
+    if (r.label && r.label !== range) { doc.setFontSize(7.5); txt(range, M + 6, M + 34); }
+
+    // four boxes
+    let y = M + 42; const bw = (CW - 3 * 4) / 4;
+    [[T("Money in"), M$(tin), C.good], [T("Amount spent"), M$(tout), C.bad], [T("Left over"), (left < 0 ? "−" : "") + M$(Math.abs(left)), C.ink], [T("You kept"), kept == null ? "—" : kept + "%", C.ink]].forEach(([lab, val, col], k) => {
+      const x = M + k * (bw + 4);
+      if (k === 3) { doc.setFillColor(...C.soft); doc.roundedRect(x, y, bw, 17, 3, 3, "F"); }
+      else { doc.setDrawColor(...C.line); doc.setLineWidth(0.3); doc.roundedRect(x, y, bw, 17, 3, 3, "S"); }
+      doc.setFont("Pop", "bold"); doc.setFontSize(7.5); doc.setTextColor(...C.muted); txt(lab, x + 3.5, y + 6);
+      doc.setFontSize(12); doc.setTextColor(...col); txt(val, x + 3.5, y + 13);
+    });
+    y += 25;
+
+    const heading = (t1, t2) => {
+      if (y > 262) { doc.addPage(); y = M + 4; }
+      doc.setFont("Pop", "bold"); doc.setFontSize(12); doc.setTextColor(...C.ink); txt(t1, M, y);
+      if (t2) { doc.setFont("Pop", "normal"); doc.setFontSize(8); doc.setTextColor(...C.muted); txt(t2, W - M, y, { align: "right" }); }
+      y += 3;
+    };
+    const base = {
+      theme: "plain", margin: { left: M, right: M, top: M + 4, bottom: 18 },
+      styles: { font: "Pop", fontSize: 8.8, textColor: C.ink, cellPadding: { top: 2.3, bottom: 2.3, left: 2.4, right: 2.4 }, lineColor: C.line },
+      headStyles: { font: "Pop", fontStyle: "bold", fontSize: 7.2, textColor: C.muted },
+      alternateRowStyles: { fillColor: C.zebra },
+      didDrawCell: d => { if (d.section === "head") { doc.setDrawColor(...C.accent); doc.setLineWidth(0.5); doc.line(d.cell.x, d.cell.y + d.cell.height, d.cell.x + d.cell.width, d.cell.y + d.cell.height); } },
+      didParseCell: d => { if (typeof d.cell.raw === "string") d.cell.text = d.cell.text.map(pdfText); }
+    };
+    const after = () => { y = doc.lastAutoTable.finalY + 10; };
+    const bar = (d, frac, col) => {
+      const w = Math.max(1.5, (d.cell.width - 6) * Math.min(1, frac)), yy = d.cell.y + d.cell.height / 2 - 1.3;
+      doc.setFillColor(...C.line); doc.roundedRect(d.cell.x + 3, yy, d.cell.width - 6, 2.6, 1.3, 1.3, "F");
+      doc.setFillColor(...col); doc.roundedRect(d.cell.x + 3, yy, w, 2.6, 1.3, 1.3, "F");
+    };
+
+    // spending by category
+    const by = {}; for (const x of tx) if (x.type !== "income") by[x.category || "Other"] = (by[x.category || "Other"] || 0) + x.amount;
+    const cats = Object.entries(by).sort((a, b) => b[1] - a[1]);
+    if (cats.length) {
+      heading(T("Spending by category"), cats.length + " " + (cats.length === 1 ? T("category") : T("categories")));
+      const top = cats[0][1];
+      doc.autoTable({ ...base, startY: y, head: [[T("Category").toUpperCase(), "", T("Share").toUpperCase(), T("Amount").toUpperCase()]],
+        body: cats.map(([c, v]) => [T(c), "", Math.round(v / tout * 100) + "%", M$(v)]),
+        columnStyles: { 1: { cellWidth: 62 }, 2: { halign: "right", cellWidth: 18 }, 3: { halign: "right", fontStyle: "bold", cellWidth: 34 } },
+        didDrawCell: d => { base.didDrawCell(d); if (d.section === "body" && d.column.index === 1) bar(d, cats[d.row.index][1] / top, C.accent); } });
+      after();
+    }
+
+    // spending limits, only for a period that includes today
+    if (r.s <= today() && r.e >= today()) {
+      const lim = limitRows().filter(x => x.status !== "ended");
+      if (lim.length) {
+        heading(T("Spending limits"), T("as of today"));
+        doc.autoTable({ ...base, startY: y, head: [[T("Limit").toUpperCase(), "", T("Used").toUpperCase(), T("Status").toUpperCase()]],
+          body: lim.map(x => [T(x.name) + "\n" + T(x.when), "", M$(x.spent) + " " + T("of") + " " + M$(x.limit), x.left >= 0 ? M$(x.left) + " " + T("left") : T("Over by") + " " + M$(-x.left)]),
+          columnStyles: { 0: { fontStyle: "bold" }, 1: { cellWidth: 46 }, 2: { halign: "right" }, 3: { halign: "right", fontStyle: "bold" } },
+          didParseCell: d => { base.didParseCell(d); if (d.section === "body" && d.column.index === 3) d.cell.styles.textColor = lim[d.row.index].left >= 0 ? C.good : C.bad; },
+          didDrawCell: d => { base.didDrawCell(d); if (d.section === "body" && d.column.index === 1) { const x = lim[d.row.index]; bar(d, x.limit ? x.spent / x.limit : 0, x.left < 0 ? C.bad : C.accent); } } });
+        after();
+      }
+    }
+
+    // money set aside
+    const sa = st.plans.filter(x => !isPeriod(x) && (!x.done || ((x.done_at || "").slice(0, 10) >= r.s && (x.done_at || "").slice(0, 10) <= r.e)));
+    if (sa.length) {
+      heading(T("Set aside"));
+      doc.autoTable({ ...base, startY: y, head: [[T("For").toUpperCase(), T("When").toUpperCase(), T("Amount").toUpperCase(), T("Status").toUpperCase()]],
+        body: sa.map(x => [x.title, x.due_date ? T("by") + " " + shortDate(x.due_date) : "", M$(x.amount), x.done ? T("Paid") : T("Not paid yet")]),
+        columnStyles: { 0: { fontStyle: "bold" }, 1: { textColor: C.muted }, 2: { halign: "right" }, 3: { halign: "right" } },
+        didParseCell: d => { base.didParseCell(d); if (d.section === "body" && d.column.index === 3 && sa[d.row.index].done) { d.cell.styles.textColor = C.good; d.cell.styles.fontStyle = "bold"; } } });
+      after();
+    }
+
+    // every entry, with a running balance for the period
+    heading(T("All entries"), tx.length + " " + (tx.length === 1 ? T("entry") : T("entries")));
+    let bal = 0;
+    const body = tx.map(x => { bal += x.type === "income" ? x.amount : -x.amount; return [shortDate(x.date), x.note || T(x.category) || "", T(x.category || "Other"), x.type === "income" ? "+" + M$(x.amount) : "", x.type === "income" ? "" : "−" + M$(x.amount), (bal < 0 ? "−" : "") + M$(Math.abs(bal))]; });
+    if (!body.length) body.push(["", T("No entries in this period."), "", "", "", ""]);
+    body.push([T("Totals"), "", "", "+" + M$(tin), "−" + M$(tout), (left < 0 ? "−" : "") + M$(Math.abs(left))]);
+    const last = body.length - 1;
+    doc.autoTable({ ...base, startY: y, head: [[T("Date").toUpperCase(), T("Description").toUpperCase(), T("Category").toUpperCase(), T("Money in").toUpperCase(), T("Spent").toUpperCase(), T("Balance").toUpperCase()]],
+      body, columnStyles: { 0: { textColor: C.muted, cellWidth: 25 }, 1: { fontStyle: "bold" }, 2: { cellWidth: 30 }, 3: { halign: "right", textColor: C.good }, 4: { halign: "right" }, 5: { halign: "right", textColor: C.muted } },
+
+      didParseCell: d => {
+        base.didParseCell(d);
+        if (d.section !== "body") return;
+        if (d.column.index === 2 && d.row.index !== last) d.cell.text = [""]; // drawn as a rounded label below
+        if (d.row.index === last) { d.cell.styles.fontStyle = "bold"; d.cell.styles.fillColor = [255, 255, 255]; d.cell.styles.textColor = d.column.index === 3 ? C.good : C.ink; }
+      },
+      didDrawCell: d => {
+        base.didDrawCell(d);
+        if (d.section === "body" && d.column.index === 2 && d.row.index !== last && d.cell.raw) {
+          doc.setFont("Pop", "normal"); doc.setFontSize(7.2);
+          let label = pdfText(d.cell.raw); while (doc.getTextWidth(label) > d.cell.width - 7 && label.length > 3) label = label.slice(0, -2) + "…";
+          const w = doc.getTextWidth(label) + 4.4, cy = d.cell.y + d.cell.height / 2;
+          doc.setFillColor(...C.soft); doc.roundedRect(d.cell.x + 1.4, cy - 2.4, w, 4.8, 2.4, 2.4, "F");
+          doc.setTextColor(...C.chipText); doc.text(label, d.cell.x + 3.6, cy + 1.05);
+        }
+        if (d.section === "body" && d.row.index === last && d.column.index === 0) { doc.setDrawColor(...C.accent); doc.setLineWidth(0.5); doc.line(M, d.cell.y, W - M, d.cell.y); } } });
+    y = doc.lastAutoTable.finalY + 8;
+    if (y > 280) { doc.addPage(); y = M + 4; }
+    doc.setFont("Pop", "normal"); doc.setFontSize(7.5); doc.setTextColor(...C.muted);
+    txt(T("This statement was made by My Money from the entries you added. It is for your own records and is not a bank statement."), M, y);
+
+    // page footers
+    const n = doc.getNumberOfPages();
+    for (let k = 1; k <= n; k++) {
+      doc.setPage(k); doc.setFont("Pop", "normal"); doc.setFontSize(7.5); doc.setTextColor(...C.muted);
+      txt("My Money · " + (name ? name + " · " : "") + period, M, 290);
+      txt(T("Page") + " " + k + " " + T("of") + " " + n, W - M, 290, { align: "right" });
+    }
+    return { blob: doc.output("blob"), name: ("My-Money-statement-" + pdfText(period)).replace(/[^\w\-]+/g, "-").replace(/-+/g, "-").replace(/-$/, "") + ".pdf" };
+  }
+
+  // The statement sheet
+  let stmP = "this";
+  function stmSync() {
+    document.querySelectorAll("#stmPeriod [data-p]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.p === stmP)));
+    $("stmDates").classList.toggle("hidden", stmP !== "custom");
+    const r = stmRange(stmP);
+    $("stmInfo").textContent = r ? (r.label ? r.label + " · " : "") + longDate(r.s) + " – " + longDate(r.e) + " · " + plural(st.txs.filter(x => x.date >= r.s && x.date <= r.e).length) : "";
+    $("stmErr").textContent = "";
+  }
+  function openStm() {
+    stmP = "this"; const t = today();
+    if (!$("stmFrom").value) { $("stmFrom").value = t.slice(0, 8) + "01"; $("stmTo").value = t; }
+    stmSync(); $("stmOv").classList.add("open");
+  }
+  $("openStm").addEventListener("click", () => { $("setOv").classList.remove("open"); openStm(); });
+  $("openStm2").addEventListener("click", openStm);
+  $("stmCancel").addEventListener("click", () => $("stmOv").classList.remove("open"));
+  $("stmOv").addEventListener("click", e => { if (e.target === $("stmOv")) $("stmOv").classList.remove("open"); });
+  $("stmPeriod").addEventListener("click", e => { const b = e.target.closest("[data-p]"); if (!b) return; stmP = b.dataset.p; stmSync(); });
+  ["stmFrom", "stmTo"].forEach(id => $(id).addEventListener("input", stmSync));
+  $("stmGo").addEventListener("click", async () => {
+    const r = stmRange(stmP);
+    if (!r) { $("stmErr").textContent = T("Pick the first and last day, or tap one of the quick options."); return; }
+    $("stmGo").disabled = true; $("stmGo").textContent = T("Making your PDF…");
     try {
+      const { blob, name } = await makeStatement(r);
+      const file = new File([blob], name, { type: "application/pdf" });
+      $("stmOv").classList.remove("open");
+      try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); return; } }
+      catch (e) { if (e && e.name === "AbortError") return; }
       const url = URL.createObjectURL(file), a = document.createElement("a");
       a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 4000);
-      toast("Saved " + name);
-    } catch (_) {
-      try { await navigator.clipboard.writeText(csv.slice(1)); toast("Copied " + plural(st.txs.length) + ". Paste into a spreadsheet."); } catch (e) { toast("Couldn't export. Try again."); }
-    }
+      setTimeout(() => URL.revokeObjectURL(url), 8000);
+      toast(T("Saved") + " · " + name);
+    } catch (err) {
+      console.error(err);
+      $("stmErr").textContent = /fetch|load|network/i.test(String(err && err.message || err)) ? T("No internet connection. Try again when you're online.") : T("Couldn't make the PDF. Try again.");
+    } finally { $("stmGo").disabled = false; $("stmGo").textContent = T("Make PDF"); }
   });
 
   /* ---------- misc ---------- */

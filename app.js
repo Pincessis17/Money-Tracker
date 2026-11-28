@@ -1979,7 +1979,10 @@
   $("openSettings2").addEventListener("click", () => openSettings());
   function renderLookPickers() {
     const s = st.settings;
-    document.querySelectorAll("#sTheme .themeopt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === s.theme)));
+    const th = ["sky", "blush", "emerald", "ember", "midnight", "onyx"].includes(s.theme) ? s.theme : "emerald";
+    document.querySelectorAll("#sTheme [data-v]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === th)));
+    $("sThemePrev").dataset.t = th;
+    $("sThemeName").textContent = { emerald: "Emerald", blush: "Blush", sky: "Sky", ember: "Ember", midnight: "Midnight", onyx: "Onyx" }[th];
     const kidOn = !s.pic || (s.pic === "photo" && !s.photo);
     $("sAvatar").innerHTML = ["girl", "boy"].map(k => '<button type="button" data-v="' + k + '" aria-pressed="' + (kidOn && s.avatar === k) + '" aria-label="' + (k === "girl" ? "Girl avatar" : "Boy avatar") + '"><img src="' + avatarSrc(k, s.skin) + '" alt=""></button>').join("") +
       PROFILE_LIB.map(f => '<button type="button" data-lib="' + esc(f) + '" aria-pressed="' + (s.pic === "lib:" + f) + '" aria-label="Profile picture"><img class="pic" src="icons/profiles/' + esc(f) + '" alt=""></button>').join("") +
@@ -1989,7 +1992,10 @@
     const tones = { deep: "#6E3F27", brown: "#9A5C37", tan: "#C98F62", light: "#E2AE8A" };
     $("sSkin").innerHTML = Object.keys(tones).map(k => '<button type="button" data-v="' + k + '" aria-pressed="' + (s.skin === k) + '" aria-label="' + k + ' skin tone" style="background:' + tones[k] + '"></button>').join("");
   }
+  $("sThemeBtn").addEventListener("click", () => { renderLookPickers(); $("themeOv").classList.add("open"); });
   $("sTheme").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (!b) return; st.settings.theme = b.dataset.v; applyLook(); renderLookPickers(); });
+  $("themeDone").addEventListener("click", () => $("themeOv").classList.remove("open"));
+  $("themeOv").addEventListener("click", e => { if (e.target === $("themeOv")) $("themeOv").classList.remove("open"); });
   $("sAvatar").addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.upload) { $("picIn").value = ""; $("picIn").click(); return; }

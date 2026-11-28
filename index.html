@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=41">
+<link rel="stylesheet" href="style.css?v=42">
 <script>try{var t=localStorage.getItem("mm-theme");if(["sky","blush","emerald","ember","midnight","onyx"].indexOf(t)>-1)document.documentElement.dataset.theme=t;}catch(e){}</script>
 </head>
 <body class="signedout">
@@ -326,19 +326,22 @@
 </div>
 
 <!-- Settings sheet -->
+<div class="overlay" id="themeOv" role="dialog" aria-modal="true" aria-labelledby="themeTitle">
+  <div class="sheet">
+    <h2 id="themeTitle">Choose a theme</h2>
+    <div class="themegrid" id="sTheme"><button type="button" data-v="emerald" aria-pressed="false"><span class="tprev" data-t="emerald" aria-hidden="true"><span class="tp-band"><span class="tp-hi"><i class="tp-av"></i><i class="tp-name"></i></span><span class="tp-hero"><i></i><b></b><img src="icons/wallet.png" alt=""></span></span><span class="tp-body"><span class="tp-card"><span class="tp-lines"><i></i><i></i></span><span class="tp-ring"></span></span><span class="tp-card"><span class="tp-bars"><i style="height:90%"></i><i style="height:60%"></i><i style="height:35%"></i><i style="height:25%"></i></span></span><span class="tp-card"><span class="tp-lines"><i></i><i></i></span></span></span><span class="tp-tab"></span></span><span class="tn">Emerald</span></button><button type="button" data-v="blush" aria-pressed="false"><span class="tprev" data-t="blush" aria-hidden="true"><span class="tp-band"><span class="tp-hi"><i class="tp-av"></i><i class="tp-name"></i></span><span class="tp-hero"><i></i><b></b><img src="icons/wallet.png" alt=""></span></span><span class="tp-body"><span class="tp-card"><span class="tp-lines"><i></i><i></i></span><span class="tp-ring"></span></span><span class="tp-card"><span class="tp-bars"><i style="height:90%"></i><i style="height:60%"></i><i style="height:35%"></i><i style="height:25%"></i></span></span><span class="tp-card"><span class="tp-lines"><i></i><i></i></span></span></span><span class="tp-tab"></span></span><span class="tn">Blush</span></button><button type="button" data-v="sky" aria-pressed="false"><span class="tprev" data-t="sky" aria-hidden="true"><span class="tp-band"><span class="tp-hi"><i class="tp-av"></i><i class="tp-name"></i></span><span class="tp-hero"><i></i><b></b><img src="icons/wallet.png" alt=""></span></span><span class="tp-body"><span class="tp-card"><span class="tp-lines"><i></i><i></i></span><span class="tp-ring"></span></span><span class="tp-card"><span class="tp-bars"><i style="height:90%"></i><i style="height:60%"></i><i style="height:35%"></i><i style="height:25%"></i></span></span><span class="tp-card"><span class="tp-lines"><i></i><i></i></span></span></span><span class="tp-tab"></span></span><span class="tn">Sky</span></button><button type="button" data-v="ember" aria-pressed="false"><span class="tprev" data-t="ember" aria-hidden="true"><span class="tp-band"><span class="tp-hi"><i class="tp-av"></i><i class="tp-name"></i></span><span class="tp-hero"><i></i><b></b><img src="icons/wallet.png" alt=""></span></span><span class="tp-body"><span class="tp-card"><span class="tp-lines"><i></i><i></i></span><span class="tp-ring"></span></span><span class="tp-card"><span class="tp-bars"><i style="height:90%"></i><i style="height:60%"></i><i style="height:35%"></i><i style="height:25%"></i></span></span><span class="tp-card"><span class="tp-lines"><i></i><i></i></span></span></span><span class="tp-tab"></span></span><span class="tn">Ember</span></button><button type="button" data-v="midnight" aria-pressed="false"><span class="tprev" data-t="midnight" aria-hidden="true"><span class="tp-band"><span class="tp-hi"><i class="tp-av"></i><i class="tp-name"></i></span><span class="tp-hero"><i></i><b></b><img src="icons/wallet.png" alt=""></span></span><span class="tp-body"><span class="tp-card"><span class="tp-lines"><i></i><i></i></span><span class="tp-ring"></span></span><span class="tp-card"><span class="tp-bars"><i style="height:90%"></i><i style="height:60%"></i><i style="height:35%"></i><i style="height:25%"></i></span></span><span class="tp-card"><span class="tp-lines"><i></i><i></i></span></span></span><span class="tp-tab"></span></span><span class="tn">Midnight</span></button><button type="button" data-v="onyx" aria-pressed="false"><span class="tprev" data-t="onyx" aria-hidden="true"><span class="tp-band"><span class="tp-hi"><i class="tp-av"></i><i class="tp-name"></i></span><span class="tp-hero"><i></i><b></b><img src="icons/wallet.png" alt=""></span></span><span class="tp-body"><span class="tp-card"><span class="tp-lines"><i></i><i></i></span><span class="tp-ring"></span></span><span class="tp-card"><span class="tp-bars"><i style="height:90%"></i><i style="height:60%"></i><i style="height:35%"></i><i style="height:25%"></i></span></span><span class="tp-card"><span class="tp-lines"><i></i><i></i></span></span></span><span class="tp-tab"></span></span><span class="tn">Onyx</span></button></div>
+    <div class="actions"><div class="right"><button type="button" class="btn primary" id="themeDone">Done</button></div></div>
+  </div>
+</div>
+
 <div class="overlay" id="setOv" role="dialog" aria-modal="true" aria-labelledby="setTitle">
   <div class="sheet">
     <h2 id="setTitle">Settings</h2>
     <p class="sub hidden" id="setIntro">Welcome! Pick a name, a look you like and the currency you use. You can change these any time in Settings.</p>
     <div class="field"><label for="sName">Your name</label><input id="sName" maxlength="40" autocomplete="given-name" placeholder="What should the app call you?"></div>
-    <div><div class="sub sublbl">Theme</div><div class="themepick" id="sTheme">
-      <button type="button" data-v="blush" class="themeopt blush"><span class="sw"><i></i><i></i><i></i></span>Blush</button>
-      <button type="button" data-v="sky" class="themeopt sky"><span class="sw"><i></i><i></i><i></i></span>Sky</button>
-      <button type="button" data-v="emerald" class="themeopt emerald"><span class="sw"><i></i><i></i><i></i></span>Emerald</button>
-      <button type="button" data-v="ember" class="themeopt ember"><span class="sw"><i></i><i></i><i></i></span>Ember</button>
-      <button type="button" data-v="midnight" class="themeopt midnight"><span class="sw"><i></i><i></i><i></i></span>Midnight</button>
-      <button type="button" data-v="onyx" class="themeopt onyx"><span class="sw"><i></i><i></i><i></i></span>Onyx</button>
-    </div></div>
+    <div><div class="sub sublbl">Theme</div>
+      <button type="button" class="themerow" id="sThemeBtn" aria-haspopup="dialog"><span class="tprev" id="sThemePrev" data-t="emerald" aria-hidden="true"><span class="tp-band"><span class="tp-hi"><i class="tp-av"></i><i class="tp-name"></i></span><span class="tp-hero"><i></i><b></b><img src="icons/wallet.png" alt=""></span></span><span class="tp-body"><span class="tp-card"><span class="tp-lines"><i></i><i></i></span><span class="tp-ring"></span></span><span class="tp-card"><span class="tp-bars"><i style="height:90%"></i><i style="height:60%"></i><i style="height:35%"></i><i style="height:25%"></i></span></span><span class="tp-card"><span class="tp-lines"><i></i><i></i></span></span></span><span class="tp-tab"></span></span><span><b id="sThemeName">Emerald</b><span class="sub">Tap to change</span></span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+    </div>
     <div><div class="sub sublbl">Profile picture</div><div class="avpick" id="sAvatar"></div><input type="file" id="picIn" accept="image/*" class="hidden"></div>
     <div id="sSkinRow"><div class="sub sublbl">Skin tone</div><div class="skinpick" id="sSkin"></div></div>
     <div class="field"><label for="sLang">Language</label><select data-lang id="sLang"></select></div>
@@ -583,10 +586,10 @@
 
 <div class="toast" id="toast" role="status"></div>
 
-<script src="i18n.js?v=41"></script>
+<script src="i18n.js?v=42"></script>
 <script src="supabase.js"></script>
-<script src="config.js?v=41"></script>
-<script src="vault.js?v=41"></script>
-<script src="app.js?v=41"></script>
+<script src="config.js?v=42"></script>
+<script src="vault.js?v=42"></script>
+<script src="app.js?v=42"></script>
 </body>
 </html>

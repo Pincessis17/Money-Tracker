@@ -478,6 +478,8 @@ T = {
 "Ember": ("Braise", "Dife"),
 "Midnight": ("Minuit", "Minwi"),
 "Onyx": ("Onyx", "Onyx"),
+"Choose a theme": ("Choisir un thème", "Swazir enn tem"),
+"Tap to change": ("Touchez pour changer", "Tap pou sanze"),
 "Avatar": ("Avatar", "Avatar"),
 "Profile picture": ("Photo de profil", "Foto profil"),
 "Upload": ("Importer", "Telesarze"),

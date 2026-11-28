@@ -490,6 +490,9 @@
     $("ioInBar").style.width = (s.i / top * 100) + "%";
     $("ioOutBar").style.width = (s.o / top * 100) + "%";
     renderRing(s);
+    const none = !s.i && !s.o;
+    $("ioEmpty").classList.toggle("hidden", !none);
+    document.querySelectorAll(".io .iotiles, .io .iorow").forEach(el => el.classList.toggle("hidden", none));
     const diff = s.o - p.o;
     $("kOutHint").innerHTML = p.o > 0 && cur.length ? (diff > 0 ? 'Spending is <span class="bad">' + esc(money(diff)) + ' higher</span> than last month' : 'Spending is <span class="good">' + esc(money(-diff)) + ' lower</span> than last month') : "";
     // journal summary
@@ -1889,6 +1892,7 @@
   $("addIn").addEventListener("click", () => openEntry({ type: "income" }));
   // Home quick buttons reuse the + menu's actions.
   $("quick").addEventListener("click", e => { const b = e.target.closest("[data-q]"); if (b) $(b.dataset.q).click(); });
+  $("ioEmpty").addEventListener("click", e => { const b = e.target.closest("[data-q]"); if (b) $(b.dataset.q).click(); });
   $("addOut").addEventListener("click", () => openEntry({ type: "expense" }));
   $("txList").addEventListener("click", e => { const b = e.target.closest(".tx"); if (!b) return; const t = st.txs.find(x => x.id === b.dataset.id); if (t) openEntry({ tx: t }); });
 

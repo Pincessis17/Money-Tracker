@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=38">
 <script>try{var t=localStorage.getItem("mm-theme");if(t==="sky"||t==="blush"||t==="emerald")document.documentElement.dataset.theme=t;}catch(e){}</script>
 </head>
 <body class="signedout">
@@ -137,10 +137,15 @@
     <div id="dueAlert"></div>
 
     <section class="card io">
-      <div class="card-head"><h2>Money in vs Expense</h2><span class="sub">This month</span></div>
+      <div class="card-head"><h2>Money in vs Amount spent</h2><span class="sub">This month</span></div>
+      <div class="ioempty hidden" id="ioEmpty">
+        <span class="ioemptyic" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7a2 2 0 0 1 2-2h12v4M4 7v10a2 2 0 0 0 2 2h14V9H6a2 2 0 0 1-2-2z"/><circle cx="16" cy="14" r="1.2"/></svg></span>
+        <p>Nothing yet this month. Add the money you receive and what you spend, and you'll see here how much you keep.</p>
+        <div class="ioemptybtns"><button type="button" class="btn primary" data-q="addIn">+ Money in</button><button type="button" class="btn" data-q="addOut">+ Expense</button></div>
+      </div>
       <div class="iotiles">
         <div class="iot"><span>Money in</span><b class="num" id="kIn">—</b><i class="iobar"><i id="ioInBar"></i></i></div>
-        <div class="iot"><span>Expense</span><b class="num" id="kOut">—</b><i class="iobar out"><i id="ioOutBar"></i></i></div>
+        <div class="iot"><span>Amount spent</span><b class="num" id="kOut">—</b><i class="iobar out"><i id="ioOutBar"></i></i></div>
       </div>
       <div class="iorow">
         <span class="ioic in" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></span>
@@ -575,10 +580,10 @@
 
 <div class="toast" id="toast" role="status"></div>
 
-<script src="i18n.js"></script>
+<script src="i18n.js?v=38"></script>
 <script src="supabase.js"></script>
-<script src="config.js"></script>
-<script src="vault.js"></script>
-<script src="app.js"></script>
+<script src="config.js?v=38"></script>
+<script src="vault.js?v=38"></script>
+<script src="app.js?v=38"></script>
 </body>
 </html>

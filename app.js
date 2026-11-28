@@ -416,11 +416,11 @@
   function showPic(el, p) { el.src = p.src; el.classList.toggle("pic", p.img); }
   function avatarSrc(kind, skin) { return "icons/avatars/" + (kind === "boy" ? "boy" : "girl") + "-" + (["deep", "brown", "tan", "light"].includes(skin) ? skin : "brown") + ".png"; }
   function applyLook() {
-    const s = st.settings, theme = ["sky", "blush", "emerald"].includes(s.theme) ? s.theme : "emerald";
+    const s = st.settings, theme = ["sky", "blush", "emerald", "ember", "midnight", "onyx"].includes(s.theme) ? s.theme : "emerald";
     document.documentElement.dataset.theme = theme;
     const pic = picOf(s);
     try { localStorage.setItem("mm-theme", theme); localStorage.setItem("mm-avatar", s.avatar + "|" + s.skin); localStorage.setItem("mm-pic", JSON.stringify(pic)); localStorage.setItem("mm-name", s.name || ""); } catch (_) {}
-    const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = { sky: "#EAF1FC", blush: "#F8F0EB", emerald: "#F3F7F5" }[theme];
+    const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = { sky: "#EAF1FC", blush: "#F8F0EB", emerald: "#F3F7F5", ember: "#0B0B0C", midnight: "#06110D", onyx: "#0A0A0A" }[theme];
     showPic($("meAvatar"), pic); showPic($("authAvatar"), pic);
     const h = new Date().getHours();
     $("greet").textContent = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
@@ -472,7 +472,7 @@
   }
   function txRow(t) {
     const inc = t.type === "income", col = catColor(t.category || "Other", t.type);
-    return '<button class="tx" data-id="' + esc(t.id) + '"><span class="ic" style="background:color-mix(in srgb, ' + col + ' 16%, white);color:' + col + '">' + catIcon(t.category) + '</span>' +
+    return '<button class="tx" data-id="' + esc(t.id) + '"><span class="ic" style="background:color-mix(in srgb, ' + col + ' 18%, var(--surface));color:' + col + '">' + catIcon(t.category) + '</span>' +
       '<span style="min-width:0"><div class="t1">' + esc(t.note || t.category || "Entry") + '</div><div class="t2">' + esc(t.category || "Uncategorised") + (t.receipt_path ? " · receipt" : "") + '</div></span>' +
       '<span class="amt num ' + (inc ? "in" : "out") + '">' + (inc ? "+" : "−") + esc(money(t.amount)) + '</span></button>';
   }

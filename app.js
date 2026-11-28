@@ -353,7 +353,9 @@
       else { legacySettings = true; d = { currency: set.data.currency, expense_cats: set.data.expense_cats, income_cats: set.data.income_cats, budgets: set.data.budgets, display_name: set.data.display_name, theme: set.data.theme, avatar: set.data.avatar, skin: set.data.skin }; }
       // Older accounts kept only a symbol: "Rs" means the Mauritian rupee.
       if (d) st.settings = { currency: d.currency || "Rs", expenseCats: d.expense_cats || clone(DEFAULTS.expenseCats), incomeCats: d.income_cats || clone(DEFAULTS.incomeCats), budgets: d.budgets || {},
-        name: d.display_name || "", theme: d.theme || "blush", avatar: d.avatar || "girl", skin: d.skin || "brown", home: d.home || "MUR" };
+        name: d.display_name || "", theme: d.theme || "emerald", avatar: d.avatar || "girl", skin: d.skin || "brown", home: d.home || "MUR", look: d.look || 0 };
+      // Emerald became the default look: move every account to it once. People can switch back in Settings.
+      if (d && !d.look) { st.settings.theme = "emerald"; st.settings.look = 2; saveSettings().catch(() => {}); }
     }
     // Move any older unencrypted rows into the encrypted format, once.
     const toLock = [["transactions", T.legacy], ["plans", P.legacy], ["fx_holdings", H.legacy], ["fx_tracker", K.legacy]];
@@ -373,7 +375,7 @@
   }
   async function saveSettings() {
     await putEnc("settings", { currency: st.settings.currency, expense_cats: st.settings.expenseCats, income_cats: st.settings.incomeCats, budgets: st.settings.budgets || {},
-      display_name: st.settings.name || "", theme: st.settings.theme, avatar: st.settings.avatar, skin: st.settings.skin, home: home() });
+      display_name: st.settings.name || "", theme: st.settings.theme, avatar: st.settings.avatar, skin: st.settings.skin, home: home(), look: st.settings.look || 2 });
     st.hasSettingsRow = true;
   }
   let lastNowM = ym(new Date());

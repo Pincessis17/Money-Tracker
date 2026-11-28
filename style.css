@@ -392,3 +392,8 @@ textarea { font: inherit; color: inherit; border: 1px solid var(--line); backgro
 .ordiv { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
 .ordiv::before, .ordiv::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .codein { font-size: 24px; letter-spacing: 6px; text-align: center; font-variant-numeric: tabular-nums; }
+
+.pwwrap { position: relative; }
+.pwwrap input { width: 100%; padding-right: 48px; }
+.pweye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 38px; height: 38px; border: 0; background: none; border-radius: 10px; color: var(--muted); display: grid; place-items: center; padding: 0; }
+.pweye:hover, .pweye[aria-pressed="true"] { color: var(--ink); }

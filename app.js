@@ -34,6 +34,25 @@
   function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 2400); }
   function banner(msg) { const b = $("banner"); b.textContent = msg || ""; b.classList.toggle("show", !!msg); }
 
+  /* ---------- show / hide password ---------- */
+  const EYE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const EYE_OFF = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18M10.6 5.1A10.7 10.7 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.2M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+  document.querySelectorAll('input[type="password"]').forEach(inp => {
+    const w = document.createElement("div"); w.className = "pwwrap";
+    inp.parentNode.insertBefore(w, inp); w.appendChild(inp);
+    const b = document.createElement("button"); b.type = "button"; b.className = "pweye";
+    b.setAttribute("aria-label", "Show what you typed"); b.setAttribute("aria-pressed", "false"); b.innerHTML = EYE;
+    b.addEventListener("click", () => {
+      const show = inp.type === "password";
+      inp.type = show ? "text" : "password";
+      b.innerHTML = show ? EYE_OFF : EYE; b.setAttribute("aria-pressed", String(show));
+      b.setAttribute("aria-label", show ? "Hide what you typed" : "Show what you typed");
+    });
+    // Hide it again once the form is sent.
+    if (inp.form) inp.form.addEventListener("submit", () => { if (inp.type === "text") b.click(); });
+    w.appendChild(b);
+  });
+
   /* ---------- auth ---------- */
   let signUpMode = false;
   function setAuthMode(up) {
@@ -206,7 +225,9 @@
     await Vault.saveKey(st.user.id, key);
     $("vPass").value = ""; $("vNew1").value = ""; $("vNew2").value = ""; $("vRecCode").value = ""; $("vRecNew").value = "";
     document.body.classList.remove("locked");
-    loadAll();
+    await loadAll();
+    // A brand-new account: ask for a name, look and currency before anything else.
+    if (st.welcome) { st.welcome = false; openSettings(true); }
   }
   const passProblem = (a, b) => a.length < 8 ? "Use at least 8 characters. A few random words works well." : a !== b ? "The two passphrases don't match." : "";
   $("vSetup").addEventListener("submit", async e => {
@@ -228,7 +249,7 @@
   });
   $("vCopy").addEventListener("click", async () => { try { await navigator.clipboard.writeText($("vCodeText").textContent); toast("Recovery code copied"); } catch (_) { toast("Copy was blocked. Write it down instead."); } });
   $("vSaved").addEventListener("change", () => { $("vCodeDone").disabled = !$("vSaved").checked; });
-  $("vCodeDone").addEventListener("click", () => { const k = st.pendingKey; st.pendingKey = null; if (k) vaultReady(k); });
+  $("vCodeDone").addEventListener("click", () => { const k = st.pendingKey; st.pendingKey = null; if (k) { st.welcome = true; vaultReady(k); } });
   $("vUnlock").addEventListener("submit", async e => {
     e.preventDefault();
     $("vUnlockBtn").disabled = true; $("vUnlockBtn").textContent = "Unlocking…";
@@ -1778,9 +1799,18 @@
     $("sInc").innerHTML = st.settings.incomeCats.map(c => row(c, "incomeCats")).join("");
   }
   let lookBefore = null;
-  function openSettings() { lookBefore = { theme: st.settings.theme, avatar: st.settings.avatar, skin: st.settings.skin, name: st.settings.name }; renderSettings(); $("setOv").classList.add("open"); }
-  $("openSettings").addEventListener("click", openSettings);
-  $("openSettings2").addEventListener("click", openSettings);
+  function openSettings(welcome) {
+    welcome = welcome === true;
+    lookBefore = { theme: st.settings.theme, avatar: st.settings.avatar, skin: st.settings.skin, name: st.settings.name };
+    renderSettings();
+    $("setTitle").textContent = welcome ? "Set up your profile" : "Settings";
+    $("setIntro").classList.toggle("hidden", !welcome);
+    $("setDone").textContent = welcome ? "Save and start" : "Done";
+    $("setOv").classList.add("open");
+    if (welcome) setTimeout(() => $("sName").focus(), 80);
+  }
+  $("openSettings").addEventListener("click", () => openSettings());
+  $("openSettings2").addEventListener("click", () => openSettings());
   function renderLookPickers() {
     const s = st.settings;
     document.querySelectorAll("#sTheme .themeopt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === s.theme)));

@@ -387,3 +387,8 @@ textarea { font: inherit; color: inherit; border: 1px solid var(--line); backgro
 
 .plan .iconb { width: 32px; height: 32px; }
 .plan .tick.arm { border-color: var(--bad); background: var(--bad-soft); color: var(--bad); }
+
+.gbtn { width: 100%; background: #fff; color: #1f1f1f; border-color: var(--line); }
+.ordiv { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
+.ordiv::before, .ordiv::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.codein { font-size: 24px; letter-spacing: 6px; text-align: center; font-variant-numeric: tabular-nums; }

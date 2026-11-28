@@ -58,6 +58,64 @@
       $("aErr").textContent = /rate|seconds|too many/i.test((err && err.message) || "") ? "Please wait a minute before asking for another email." : "Couldn't send the email. Try again in a minute.";
     } finally { $("aResend").disabled = false; }
   });
+  /* ---- confirm-by-code (the email's code or its link both work) ---- */
+  let codeEmail = "";
+  function showCode(email, msg) {
+    codeEmail = email;
+    $("authForm").classList.add("hidden"); $("codeForm").classList.remove("hidden");
+    $("codeSub").textContent = msg || ("We sent a code to " + email + ". Type it below to finish. It can take a minute to arrive, so check spam too.");
+    $("aCode").value = ""; $("cErr").textContent = ""; $("cOk").textContent = "";
+    setTimeout(() => $("aCode").focus(), 60);
+  }
+  function hideCode() { $("codeForm").classList.add("hidden"); $("authForm").classList.remove("hidden"); }
+  $("cBack").addEventListener("click", () => { hideCode(); setAuthMode(true); });
+  $("aCode").addEventListener("input", () => {
+    $("aCode").value = $("aCode").value.replace(/\D/g, "").slice(0, 8);
+    if ($("aCode").value.length === 6 && !$("cSubmit").disabled) $("codeForm").requestSubmit();
+  });
+  $("codeForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const token = $("aCode").value.trim();
+    $("cErr").textContent = ""; $("cOk").textContent = "";
+    if (token.length < 6) { $("cErr").textContent = "Type the code from the email."; return; }
+    $("cSubmit").disabled = true; $("cSubmit").textContent = "Checking…";
+    try {
+      const { error } = await sb.auth.verifyOtp({ email: codeEmail, token, type: "signup" });
+      if (error) throw error;
+      hideCode(); // signed in: the auth listener opens the app
+    } catch (err) {
+      const m = (err && err.message) || "";
+      $("cErr").textContent = /expired|invalid/i.test(m) ? "That code is wrong or has expired. Check you used the newest email, or send a new code." :
+        /fetch|network|load failed/i.test(m) ? "No internet connection. Try again when you're online." : "Couldn't check the code. Try again.";
+    } finally { $("cSubmit").disabled = false; $("cSubmit").textContent = "Confirm and continue"; }
+  });
+  $("cResend").addEventListener("click", async () => {
+    $("cResend").disabled = true; $("cErr").textContent = "";
+    try {
+      const { error } = await sb.auth.resend({ type: "signup", email: codeEmail, options: { emailRedirectTo: location.origin + location.pathname } });
+      if (error) throw error;
+      $("cOk").textContent = "New code sent. Use the code in the newest email.";
+    } catch (err) {
+      $("cErr").textContent = /rate|seconds|too many/i.test((err && err.message) || "") ? "Please wait a minute before asking for another code." : "Couldn't send a code. Try again in a minute.";
+    } finally { $("cResend").disabled = false; }
+  });
+
+  /* ---- Google sign-in: shown only once it's switched on in Supabase ---- */
+  fetch(APP_CONFIG.supabaseUrl + "/auth/v1/settings", { headers: { apikey: APP_CONFIG.supabaseKey } })
+    .then(r => r.ok ? r.json() : null)
+    .then(j => { if (j && j.external && j.external.google) { $("aGoogle").classList.remove("hidden"); $("aOr").classList.remove("hidden"); } })
+    .catch(() => {});
+  $("aGoogle").addEventListener("click", async () => {
+    $("aErr").textContent = ""; $("aGoogle").disabled = true;
+    const { error } = await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname } });
+    if (error) { $("aGoogle").disabled = false; $("aErr").textContent = "Couldn't open Google sign-in. Try again, or use your email."; }
+  });
+  // Coming back from Google with an error in the address.
+  (() => {
+    const q = new URLSearchParams(location.hash.slice(1) + "&" + location.search.slice(1));
+    if (q.get("error")) { $("aErr").textContent = "Google sign-in didn't finish. Try again, or use your email."; history.replaceState(null, "", location.pathname); }
+  })();
+
   // A phone that has never logged in starts on "Create your account".
   try { if (!localStorage.getItem("mm-has-account")) setAuthMode(true); } catch (_) {}
   $("authForm").addEventListener("submit", async (e) => {
@@ -74,10 +132,7 @@
       if (signUpMode) {
         const { data, error } = await withTimeout(sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } }));
         if (error) throw error;
-        if (!data.session) {
-          setAuthMode(false);
-          $("aOk").textContent = "Account created. Check your email and tap the confirmation link, then come back here and log in.";
-        }
+        if (!data.session) showCode(email);
       } else {
         const { error } = await withTimeout(sb.auth.signInWithPassword({ email, password }));
         if (error) throw error;
@@ -85,7 +140,12 @@
       }
     } catch (err) {
       const m = (err && err.message) || "";
-      if (/confirm/i.test(m)) $("aResend").classList.remove("hidden");
+      if (/confirm/i.test(m)) {
+        // Not confirmed yet: send a fresh code and ask for it right here.
+        await sb.auth.resend({ type: "signup", email, options: { emailRedirectTo: location.origin + location.pathname } }).catch(() => {});
+        showCode(email, "Your email isn't confirmed yet. We've sent a code to " + email + ". Type it below to finish.");
+        return;
+      }
       $("aErr").textContent = /confirm/i.test(m) ? "Your email isn't confirmed yet. Open the newest email from us and tap its link, or send a fresh one below." :
         /invalid login/i.test(m) ? "That email and password don't match." :
         /already registered/i.test(m) ? "That email already has an account. Sign in instead." :
@@ -102,7 +162,7 @@
     if ((u && u.id) === (st.user && st.user.id)) return;
     st.user = u;
     document.body.classList.toggle("signedout", !u);
-    if (u) { $("aPass").value = ""; try { localStorage.setItem("mm-has-account", "1"); } catch (_) {} startVault(); }
+    if (u) { $("aPass").value = ""; hideCode(); try { localStorage.setItem("mm-has-account", "1"); } catch (_) {} startVault(); }
     else { st.key = null; st.vault = null; st.lists = []; document.body.classList.remove("locked"); st.track = []; st.holds = []; st.txs = []; st.plans = []; st.settings = clone(DEFAULTS); }
   });
 

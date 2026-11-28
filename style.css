@@ -643,3 +643,6 @@ body.welcoming { background: linear-gradient(180deg, #D3EAF6 0%, #E0EDF3 55%, #F
 .linkbtn.forgot { justify-self: end; margin-top: -6px; font-size: 13.5px; }
 .rnote { text-align: center; margin: 0; font-size: 12.5px; }
 #pwOv { z-index: 70; }
+
+/* offline / changes waiting: a small amber dot before the sync note */
+body.offline .sync::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #f0a630; margin-right: 6px; vertical-align: 1px; }

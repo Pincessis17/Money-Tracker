@@ -281,13 +281,23 @@
 
   sb.auth.onAuthStateChange((_evt, session) => {
     if (_evt === "PASSWORD_RECOVERY") setTimeout(() => { $("pwErr").textContent = ""; $("pwOv").classList.add("open"); }, 300);
-    const u = session ? session.user : null;
+    let u = session ? session.user : null;
+    // Offline with an expired login: the saved login is still on the phone, so keep working from it.
+    if (!u && _evt === "INITIAL_SESSION") u = storedUser();
     if ((u && u.id) === (st.user && st.user.id)) return;
     st.user = u;
     document.body.classList.toggle("signedout", !u);
     if (u) { $("aPass").value = ""; hideCode(); showWelcome(false); $("resetForm").classList.add("hidden"); $("authForm").classList.remove("hidden"); try { localStorage.setItem("mm-has-account", "1"); } catch (_) {} startVault(); }
-    else { if ($("welcome").classList.contains("hidden") && !signUpMode) setAuthMode(false); st.key = null; st.vault = null; st.lists = []; document.body.classList.remove("locked"); st.track = []; st.holds = []; st.txs = []; st.plans = []; st.settings = clone(DEFAULTS); }
+    else { if ($("welcome").classList.contains("hidden") && !signUpMode) setAuthMode(false); st.key = null; st.vault = null; st.lists = []; localFor = null; outbox = []; cache = null; document.body.classList.remove("locked"); st.track = []; st.holds = []; st.txs = []; st.plans = []; st.settings = clone(DEFAULTS); }
   });
+
+  function storedUser() {
+    try {
+      const k = Object.keys(localStorage).find(k => /^sb-.*-auth-token$/.test(k));
+      const v = k && JSON.parse(localStorage.getItem(k));
+      return (v && (v.user || (v.currentSession && v.currentSession.user))) || null;
+    } catch (_) { return null; }
+  }
 
   /* ---------- private vault (end-to-end encryption) ---------- */
   const BLANK = {
@@ -304,9 +314,86 @@
     const { id, created_at, ...data } = plain;
     const enc = await Vault.enc(st.key, data);
     const row = table === "settings" ? { user_id: st.user.id, enc, ...BLANK.settings, updated_at: new Date().toISOString() } : { id, enc, ...BLANK[table] };
-    const { error } = await sb.from(table).upsert(row);
-    if (error) throw error;
+    await sendOrQueue({ op: "put", table, row });
   }
+
+  /* ---------- offline: a copy on the phone, and changes waiting to sync ----------
+     Everything kept here is already encrypted (the same rows the server holds), so the
+     copy on the phone is as private as the server copy. */
+  const TABLES = ["transactions", "settings", "plans", "fx_holdings", "fx_tracker", "lists"];
+  const idb = (() => {
+    let dbp = null;
+    const open = () => dbp || (dbp = new Promise((res, rej) => {
+      const r = indexedDB.open("mm-offline", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("kv");
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    }));
+    const tx = async (mode, fn) => { const db = await open(); return new Promise((res, rej) => { const t = db.transaction("kv", mode); const q = fn(t.objectStore("kv")); t.oncomplete = () => res(q && q.result); t.onerror = () => rej(t.error); }); };
+    return { get: k => tx("readonly", o => o.get(k)).catch(() => undefined), set: (k, v) => tx("readwrite", o => { o.put(v, k); }).catch(() => {}) };
+  })();
+  const cacheKey = () => "cache-" + st.user.id, boxKey = () => "outbox-" + st.user.id;
+  let outbox = [], cache = null, flushing = null;
+  // A login that couldn't refresh offline makes the server refuse a change; that's "try later", not "throw away".
+  const isRetry = e => isNetErr(e) || /JWT|401|403|row-level security|42501|PGRST301/i.test(String((e && (e.message || e.code || e.status)) || e || "") + " " + String(e && e.code || ""));
+  const haveSession = () => sb.auth.getSession().then(r => !!(r.data && r.data.session), () => false);
+  const isNetErr = e => navigator.onLine === false || /fetch|network|load failed|timed? ?out|NetworkError/i.test(String((e && (e.message || e.name)) || e || ""));
+  function applyOp(rows, o) {
+    if (!rows) return;
+    if (o.op === "put") {
+      if (o.table === "settings") { rows.settings = { ...(rows.settings || {}), ...o.row }; return; }
+      const list = rows[o.table] || (rows[o.table] = []);
+      const i = list.findIndex(r => r.id === o.row.id);
+      const keep = i >= 0 ? list[i].created_at : (o.row.created_at || new Date().toISOString());
+      const r = { ...o.row, created_at: keep };
+      if (i >= 0) list[i] = r; else list.push(r);
+    } else if (o.op === "del" && rows[o.table]) rows[o.table] = rows[o.table].filter(r => r.id !== o.id);
+  }
+  async function saveLocal() { if (!st.user) return; await idb.set(boxKey(), outbox); if (cache) await idb.set(cacheKey(), cache); }
+  async function runOp(o) {
+    if (o.op === "put") { const { error } = await sb.from(o.table).upsert(o.row); if (error) throw error; }
+    else if (o.op === "del") { const { error } = await sb.from(o.table).delete().eq("id", o.id); if (error) throw error; }
+    else if (o.op === "rm") { await sb.storage.from("receipts").remove([o.path]); }
+  }
+  // Try to send a change now. With no signal (or older changes still waiting) it waits on the phone instead.
+  async function sendOrQueue(o) {
+    applyOp(cache, o);
+    if (!outbox.length && navigator.onLine !== false && await haveSession()) {
+      try { await runOp(o); saveLocal(); return; }
+      catch (e) { if (!isRetry(e)) throw e; }
+    }
+    outbox.push(o); await saveLocal(); syncState();
+    flushSoon();
+  }
+  const delRow = (table, id) => sendOrQueue({ op: "del", table, id }).then(() => ({ error: null }), error => ({ error }));
+  const rmReceipt = path => sendOrQueue({ op: "rm", path }).catch(() => {});
+  let flushTimer = null;
+  function flushSoon(ms) { clearTimeout(flushTimer); flushTimer = setTimeout(() => flush(), ms || 4000); }
+  function flush() {
+    if (flushing) return flushing;
+    flushing = (async () => {
+      let sent = 0, dropped = 0;
+      if (outbox.length && !(await haveSession())) { flushSoon(30000); return; }
+      while (outbox.length && st.user && navigator.onLine !== false) {
+        try { await runOp(outbox[0]); sent++; }
+        catch (e) { if (isRetry(e)) { flushSoon(30000); break; } dropped++; }
+        outbox.shift(); await saveLocal();
+      }
+      syncState();
+      if (sent && !outbox.length) toast(T("Back online. Your changes are synced."));
+      if (dropped) toast(T("A change couldn't be synced and was skipped."));
+    })().finally(() => { flushing = null; });
+    return flushing;
+  }
+  function syncState(note) {
+    const n = outbox.length;
+    const el = $("syncNote"); if (!el) return;
+    if (n) el.textContent = (navigator.onLine === false ? T("Offline") + " · " : "") + (n === 1 ? T("1 change waiting to sync") : n + " " + T("changes waiting to sync"));
+    else if (note) el.textContent = note;
+    else if (navigator.onLine === false) el.textContent = T("Offline · showing what's saved on this phone");
+    document.body.classList.toggle("offline", navigator.onLine === false || n > 0);
+  }
+  window.addEventListener("online", () => { syncState(); if (st.key) loadAll(); });
+  window.addEventListener("offline", () => syncState());
   function vaultMode(mode) {
     document.body.classList.add("locked");
     ["vSetup", "vCode", "vUnlock", "vRecover"].forEach(id => $(id).classList.toggle("hidden", id !== mode));
@@ -316,8 +403,15 @@
   }
   async function startVault() {
     $("syncNote").textContent = "Unlocking…";
-    const { data, error } = await sb.from("vault").select("*").maybeSingle();
-    if (error) { document.body.classList.remove("locked"); banner("Couldn't reach your records. Check your connection and reopen the app."); return; }
+    const uid = st.user.id;
+    const { data, error } = navigator.onLine === false ? { error: new Error("offline") } : await sb.from("vault").select("*").maybeSingle();
+    if (error) {
+      // No signal: open with the copy saved on this phone, if there is one.
+      const saved = await idb.get("vault-" + uid), k = saved && await Vault.loadKey(uid);
+      if (saved && k && st.user && st.user.id === uid) { st.vault = saved; st.key = k; document.body.classList.remove("locked"); return loadAll(); }
+      document.body.classList.remove("locked"); banner("Couldn't reach your records. Check your connection and reopen the app."); return;
+    }
+    if (data) idb.set("vault-" + uid, data);
     st.vault = data;
     if (!data) return vaultMode("vSetup");
     const k = await Vault.loadKey(st.user.id);
@@ -405,26 +499,39 @@
   }
 
   /* ---------- data ---------- */
-  let loadSeq = 0;
+  let loadSeq = 0, localFor = null;
   async function loadAll() {
     const mine = ++loadSeq;
     $("syncNote").textContent = "Loading your records…";
     render();
     if (!st.key) return;
-    const [tx, set, pl, hl, tk, ls] = await Promise.all([
+    const uid = st.user.id;
+    if (localFor !== uid) { outbox = (await idb.get(boxKey())) || []; cache = (await idb.get(cacheKey())) || null; localFor = uid; }
+    if (outbox.length && navigator.onLine !== false) await flush();
+    const res = navigator.onLine === false || outbox.length ? null : await Promise.all([
       sb.from("transactions").select("*"),
       sb.from("settings").select("*").maybeSingle(),
       sb.from("plans").select("*"),
       sb.from("fx_holdings").select("*"),
       sb.from("fx_tracker").select("*"),
       sb.from("lists").select("*")
-    ]);
-    if (mine !== loadSeq) return; // a newer refresh has started; let it win
-    if (tx.error || set.error || pl.error || hl.error || tk.error || ls.error) {
-      $("syncNote").textContent = "Not synced";
-      banner("Couldn't load your records. Check your connection and pull down or reopen the app.");
-      return;
+    ]).catch(e => [{ error: e }]);
+    if (mine !== loadSeq || !st.user || st.user.id !== uid) return; // a newer refresh has started; let it win
+    let rows, offline = false;
+    if (!res || res.some(r => r.error)) {
+      if (!cache) {
+        $("syncNote").textContent = "Not synced";
+        banner("Couldn't load your records. Check your connection and pull down or reopen the app.");
+        return;
+      }
+      rows = clone(cache); offline = true;
+    } else {
+      const [tx, set, pl, hl, tk, ls] = res;
+      rows = { transactions: tx.data, settings: set.data, plans: pl.data, fx_holdings: hl.data, fx_tracker: tk.data, lists: ls.data };
+      cache = clone(rows); saveLocal();
+      if (st.vault) idb.set("vault-" + uid, st.vault);
     }
+    const tx = { data: rows.transactions || [] }, set = { data: rows.settings || null }, pl = { data: rows.plans || [] }, hl = { data: rows.fx_holdings || [] }, tk = { data: rows.fx_tracker || [] }, ls = { data: rows.lists || [] };
     banner("");
     const T = await decRows(tx.data, r => ({ id: r.id, created_at: r.created_at, type: r.type, amount: Number(r.amount), category: r.category, note: r.note || "", date: r.date, receipt_path: r.receipt_path }));
     const P = await decRows(pl.data, r => ({ id: r.id, created_at: r.created_at, title: r.title, amount: Number(r.amount), category: r.category, due_date: r.due_date, done: r.done, paid_tx_id: r.paid_tx_id, done_at: r.done_at, start_date: r.start_date, end_date: r.end_date, repeat: r.repeat }));
@@ -452,7 +559,7 @@
     }
     // Move any older unencrypted rows into the encrypted format, once.
     const toLock = [["transactions", T.legacy], ["plans", P.legacy], ["fx_holdings", H.legacy], ["fx_tracker", K.legacy]];
-    if (legacySettings || toLock.some(([, l]) => l.length)) {
+    if (!offline && (legacySettings || toLock.some(([, l]) => l.length))) {
       (async () => {
         try {
           for (const [table, list] of toLock) for (const row of list) await putEnc(table, row);
@@ -462,8 +569,8 @@
       })();
     }
     applyLook();
-    loadRates();
-    $("syncNote").textContent = "Synced " + new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    if (!offline) loadRates();
+    if (offline) syncState(); else { $("syncNote").textContent = "Synced " + new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }); syncState(); }
     render();
   }
   async function saveSettings() {
@@ -1101,7 +1208,7 @@
   $("trkDel").addEventListener("click", async () => {
     if ($("trkDel").dataset.confirm !== "1") { $("trkDel").dataset.confirm = "1"; $("trkDel").textContent = "Tap again to delete"; setTimeout(() => { $("trkDel").dataset.confirm = ""; $("trkDel").textContent = "Delete entry"; }, 3000); return; }
     $("trkDel").dataset.confirm = ""; $("trkDel").textContent = "Delete entry";
-    const { error } = await sb.from("fx_tracker").delete().eq("id", tk.id);
+    const { error } = await delRow("fx_tracker", tk.id);
     if (error) { $("trkErr").textContent = "Couldn't delete. Try again."; return; }
     st.track = st.track.filter(x => x.id !== tk.id); closeTrk(); render(); toast("Entry deleted");
   });
@@ -1194,7 +1301,7 @@
   $("hDel").addEventListener("click", async () => {
     if ($("hDel").dataset.confirm !== "1") { $("hDel").dataset.confirm = "1"; $("hDel").textContent = "Tap again to delete"; setTimeout(() => { $("hDel").dataset.confirm = ""; $("hDel").textContent = "Delete"; }, 3000); return; }
     $("hDel").dataset.confirm = ""; $("hDel").textContent = "Delete";
-    const { error } = await sb.from("fx_holdings").delete().eq("id", he.id);
+    const { error } = await delRow("fx_holdings", he.id);
     if (error) { $("hErr").textContent = "Couldn't delete. Try again."; return; }
     st.holds = st.holds.filter(x => x.id !== he.id); closeHold(); render(); toast("Deleted");
   });
@@ -1331,7 +1438,7 @@
       if (be.origMode === "month" && (be.mode !== "month" || be.origCat !== be.cat)) { delete budgets[be.origCat]; budgetsChanged = true; }
       if (be.mode === "month") {
         budgets[be.cat] = amt; budgetsChanged = true;
-        if (be.planId) { const { error } = await sb.from("plans").delete().eq("id", be.planId); if (error) throw error; st.plans = st.plans.filter(x => x.id !== be.planId); }
+        if (be.planId) { const { error } = await delRow("plans", be.planId); if (error) throw error; st.plans = st.plans.filter(x => x.id !== be.planId); }
       } else {
         const prev = be.planId ? st.plans.find(x => x.id === be.planId) : null;
         const row = { title: (be.cat + " limit").slice(0, 80), amount: amt, category: be.cat, due_date: null, start_date: s0, end_date: e0, repeat: be.mode === "week" ? "weekly" : "none" };
@@ -1347,7 +1454,7 @@
   });
   $("bDel").addEventListener("click", async () => {
     try {
-      if (be.planId) { const { error } = await sb.from("plans").delete().eq("id", be.planId); if (error) throw error; st.plans = st.plans.filter(x => x.id !== be.planId); }
+      if (be.planId) { const { error } = await delRow("plans", be.planId); if (error) throw error; st.plans = st.plans.filter(x => x.id !== be.planId); }
       else { const next = { ...(st.settings.budgets || {}) }; delete next[be.origCat]; await writeBudgets(next); }
       closeBudget(); render(); toast("Limit removed");
     } catch (e) { $("bErr").textContent = "Couldn't remove. Try again."; }
@@ -1393,7 +1500,7 @@
   const PEN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13 7 4 4"/></svg>';
   const BIN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>';
   async function killList(id) {
-    const { error } = await sb.from("lists").delete().eq("id", id);
+    const { error } = await delRow("lists", id);
     if (error) throw error;
     st.lists = st.lists.filter(x => x.id !== id);
   }
@@ -1426,8 +1533,8 @@
   }
   async function deleteTx(id) {
     const t = st.txs.find(x => x.id === id);
-    await sb.from("transactions").delete().eq("id", id);
-    if (t && t.receipt_path) sb.storage.from("receipts").remove([t.receipt_path]);
+    await delRow("transactions", id);
+    if (t && t.receipt_path) rmReceipt(t.receipt_path);
     st.txs = st.txs.filter(x => x.id !== id);
   }
   async function tickItem(l, i) {
@@ -1471,7 +1578,7 @@
     if (ie) { const [lid, iid] = ie.dataset.iedit.split("|"); openItem(lid, iid); return; }
     const le = e.target.closest("[data-ledit]"); if (le) { openList(st.lists.find(x => x.id === le.dataset.ledit)); return; }
     const ld = e.target.closest("[data-ldone]");
-    if (ld) { const l = st.lists.find(x => x.id === ld.dataset.ldone); if (!l) return; const { error } = await sb.from("lists").delete().eq("id", l.id); if (error) return toast("Couldn't remove. Try again."); st.lists = st.lists.filter(x => x.id !== l.id); render(); toast("List removed. Its expenses stay in your journal."); }
+    if (ld) { const l = st.lists.find(x => x.id === ld.dataset.ldone); if (!l) return; const { error } = await delRow("lists", l.id); if (error) return toast("Couldn't remove. Try again."); st.lists = st.lists.filter(x => x.id !== l.id); render(); toast("List removed. Its expenses stay in your journal."); }
   });
   $("listsWrap").addEventListener("submit", async e => {
     const f = e.target.closest("[data-ladd]"); if (!f) return;
@@ -1531,7 +1638,7 @@
   $("lDel").addEventListener("click", async () => {
     if ($("lDel").dataset.confirm !== "1") { $("lDel").dataset.confirm = "1"; $("lDel").textContent = "Tap again to delete"; setTimeout(() => { $("lDel").dataset.confirm = ""; $("lDel").textContent = "Delete list"; }, 3000); return; }
     $("lDel").dataset.confirm = ""; $("lDel").textContent = "Delete list";
-    const { error } = await sb.from("lists").delete().eq("id", le.id);
+    const { error } = await delRow("lists", le.id);
     if (error) { $("lErr").textContent = "Couldn't delete. Try again."; return; }
     st.lists = st.lists.filter(x => x.id !== le.id); closeList(); render(); toast("List deleted. Expenses you ticked stay in your journal.");
   });
@@ -1667,7 +1774,7 @@
     const kill = e.target.closest("[data-pkill]");
     if (kill) {
       if (!confirmTap(kill, "Tap the bin again to delete this plan")) return;
-      const { error } = await sb.from("plans").delete().eq("id", kill.dataset.pkill);
+      const { error } = await delRow("plans", kill.dataset.pkill);
       if (error) return toast("Couldn't delete. Check your connection.");
       st.plans = st.plans.filter(x => x.id !== kill.dataset.pkill); render(); toast("Plan deleted");
       return;
@@ -1806,7 +1913,7 @@
   $("pDel").addEventListener("click", async () => {
     if ($("pDel").dataset.confirm !== "1") { $("pDel").dataset.confirm = "1"; $("pDel").textContent = "Tap again to delete"; setTimeout(() => { $("pDel").dataset.confirm = ""; $("pDel").textContent = "Delete"; }, 3000); return; }
     $("pDel").dataset.confirm = ""; $("pDel").textContent = "Delete";
-    const { error } = await sb.from("plans").delete().eq("id", pe.id);
+    const { error } = await delRow("plans", pe.id);
     if (error) { $("pErr").textContent = "Couldn't delete. Try again."; return; }
     st.plans = st.plans.filter(x => x.id !== pe.id); closePlan(); render(); toast("Plan deleted");
   });
@@ -1915,7 +2022,7 @@
         const path = st.user.id + "/" + uuid() + ".bin";
         const sealed = await Vault.encBytes(st.key, await ed.receiptBlob.arrayBuffer());
         const up = await sb.storage.from("receipts").upload(path, new Blob([sealed], { type: "application/octet-stream" }), { contentType: "application/octet-stream" });
-        if (up.error) throw up.error;
+        if (up.error) { if (isNetErr(up.error)) { $("fErr").textContent = T("Receipt photos need internet. Remove the photo to save now, or try again when you're online."); return; } throw up.error; }
         receipt_path = path;
       }
       const row = { type: ed.type, amount: Math.round(amt * 100) / 100, category: ed.category, note: $("fNote").value.trim().slice(0, 120), date: $("fDate").value, receipt_path };
@@ -1949,9 +2056,9 @@
     if ($("delBtn").dataset.confirm !== "1") { $("delBtn").dataset.confirm = "1"; $("delBtn").textContent = "Tap again to delete"; setTimeout(() => { $("delBtn").dataset.confirm = ""; $("delBtn").textContent = "Delete"; }, 3000); return; }
     $("delBtn").dataset.confirm = ""; $("delBtn").textContent = "Delete";
     const t = st.txs.find(x => x.id === ed.id);
-    const { error } = await sb.from("transactions").delete().eq("id", ed.id);
+    const { error } = await delRow("transactions", ed.id);
     if (error) { $("fErr").textContent = "Couldn't delete. Try again."; return; }
-    if (t && t.receipt_path) sb.storage.from("receipts").remove([t.receipt_path]);
+    if (t && t.receipt_path) rmReceipt(t.receipt_path);
     st.txs = st.txs.filter(x => x.id !== ed.id);
     st.plans = st.plans.map(x => x.paid_tx_id === ed.id ? { ...x, paid_tx_id: null } : x);
     closeEntry(); render(); toast("Deleted");

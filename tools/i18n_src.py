@@ -53,6 +53,7 @@ T = {
 "That email address can't be used. Check it's a real address you can open.": ("Cette adresse e-mail ne peut pas être utilisée. Vérifiez qu'elle existe.", "Pa kapav servi sa ladres imel-la. Get si li enn vre ladres ki ou kapav ouvert."),
 "Too many attempts. Wait a few minutes and try again.": ("Trop de tentatives. Attendez quelques minutes et réessayez.", "Tro boukou zese. Atann enn de minit ek reseye."),
 "That took too long. Check your internet connection and try again.": ("C'est trop long. Vérifiez votre connexion internet et réessayez.", "Sa finn pran tro boukou letan. Get ou koneksion internet ek reseye."),
+"Can't reach the server right now. It may be waking up, so try again in a minute.": ("Impossible de joindre le serveur pour le moment. Il est peut-être en train de redémarrer, réessayez dans une minute.", "Pa kapav zwenn server la aster-la. Li kapav pe reveye, reseye dan enn minit."),
 "No internet connection. Try again when you're online.": ("Pas de connexion internet. Réessayez une fois connecté.", "Pena koneksion internet. Reseye kan ou konekte."),
 "Something went wrong. Try again.": ("Un problème est survenu. Réessayez.", "Enn zafer pa finn mars. Reseye."),
 "Your email isn't confirmed yet. Open the newest email from us and tap its link, or send a fresh one below.": ("Votre e-mail n'est pas encore confirmé. Ouvrez notre dernier e-mail et touchez le lien, ou demandez-en un nouveau ci-dessous.", "Ou imel pa ankor konfirme. Ouver nou dernie imel ek tap so lien, ouswa avoy enn nouvo anba."),

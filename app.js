@@ -1,5 +1,12 @@
 (() => {
   const $ = (id) => document.getElementById(id);
+  // When a request fails: if the phone has internet, the problem is our server (maybe waking up), not their connection.
+  function netMsg() {
+    const t = (window.I18N && I18N.t) ? I18N.t : (x => x);
+    return navigator.onLine === false
+      ? t("No internet connection. Try again when you're online.")
+      : t("Can't reach the server right now. It may be waking up, so try again in a minute.");
+  }
   const clone = (o) => (typeof structuredClone === "function" ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
   const sb = window.supabase.createClient(APP_CONFIG.supabaseUrl, APP_CONFIG.supabaseKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
@@ -125,7 +132,7 @@
     } catch (err) {
       const m = (err && err.message) || "";
       $("cErr").textContent = /expired|invalid/i.test(m) ? "That code is wrong or has expired. Check you used the newest email, or send a new code." :
-        /fetch|network|load failed/i.test(m) ? "No internet connection. Try again when you're online." : "Couldn't check the code. Try again.";
+        /fetch|network|load failed/i.test(m) ? netMsg() : "Couldn't check the code. Try again.";
     } finally { $("cSubmit").disabled = false; $("cSubmit").textContent = "Confirm and continue"; }
   });
   $("cResend").addEventListener("click", async () => {
@@ -199,7 +206,7 @@
         /invalid/i.test(m) && /email/i.test(m) ? "That email address can't be used. Check it's a real address you can open." :
         /rate limit|too many/i.test(m) ? "Too many attempts. Wait a few minutes and try again." :
         m === "timeout" ? "That took too long. Check your internet connection and try again." :
-        /fetch|network|load failed/i.test(m) ? "No internet connection. Try again when you're online." : (m || "Something went wrong. Try again.");
+        /fetch|network|load failed/i.test(m) ? netMsg() : (m || "Something went wrong. Try again.");
     } finally { $("aSubmit").disabled = false; $("aSubmit").textContent = label; }
   });
 
@@ -257,7 +264,7 @@
       $("rErr").textContent = /expired|invalid|token/i.test(m) ? "That code is wrong or has expired. Check you used the newest email, or send a new code." :
         /rate|seconds|too many/i.test(m) ? "Please wait a minute before asking for another code." :
         /same.*password|different from the old/i.test(m) ? "Choose a password that's different from your old one." :
-        /fetch|network|load failed/i.test(m) ? "No internet connection. Try again when you're online." : "Something went wrong. Try again.";
+        /fetch|network|load failed/i.test(m) ? netMsg() : "Something went wrong. Try again.";
     } finally { $("rSubmit").disabled = false; }
   });
   // Someone tapped the link in the reset email instead of typing the code.
@@ -1933,7 +1940,7 @@
         toast((wasEdit ? "Updated" : (saved.type === "income" ? "Money in added" : "Expense added") + " · " + saved.category) + (bMsg || planMsg));
       }
     } catch (err) {
-      $("fErr").textContent = /fetch|network/i.test((err && err.message) || "") ? "No internet connection. Try again when you're online." : "Couldn't save. Try again.";
+      $("fErr").textContent = /fetch|network/i.test((err && err.message) || "") ? netMsg() : "Couldn't save. Try again.";
     } finally { $("saveBtn").disabled = false; }
   });
   $("cancelBtn").addEventListener("click", closeEntry);
@@ -2342,7 +2349,7 @@
       toast(T("Saved") + " · " + name);
     } catch (err) {
       console.error(err);
-      $("stmErr").textContent = /fetch|load|network/i.test(String(err && err.message || err)) ? T("No internet connection. Try again when you're online.") : T("Couldn't make the PDF. Try again.");
+      $("stmErr").textContent = /fetch|load|network/i.test(String(err && err.message || err)) ? netMsg() : T("Couldn't make the PDF. Try again.");
     } finally { $("stmGo").disabled = false; $("stmGo").textContent = T("Make PDF"); }
   });
 

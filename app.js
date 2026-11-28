@@ -74,8 +74,9 @@
     const k = knownUser();
     $("authTitle").textContent = up ? "Create your account" : "Welcome back" + (k.name ? ", " + k.name : "");
     $("aNotMe").classList.toggle("hidden", up || !k.avatar);
-    const a = up ? [] : k.avatar.split("|");
-    $("authAvatar").src = a[0] ? avatarSrc(a[0], a[1]) : "icons/avatars/girl-brown.png";
+    let p = null; try { p = JSON.parse(localStorage.getItem("mm-pic") || "null"); } catch (_) {}
+    const a = k.avatar.split("|");
+    showPic($("authAvatar"), !up && p && p.src ? p : { src: !up && a[0] ? avatarSrc(a[0], a[1]) : "icons/avatars/girl-brown.png", img: false });
     $("authSub").textContent = up ? "Start tracking your money in a minute" : "Log in to see your money";
     $("aSubmit").textContent = up ? "Create account" : "Log in";
     $("aSwitch").textContent = up ? "Already have an account? Log in" : "New here? Create an account";
@@ -158,7 +159,7 @@
   $("wStart").addEventListener("click", () => { showWelcome(false); setAuthMode(true); setTimeout(() => $("aEmail").focus(), 60); });
   $("wSignIn").addEventListener("click", () => { showWelcome(false); setAuthMode(false); setTimeout(() => $("aEmail").focus(), 60); });
   $("aNotMe").addEventListener("click", () => {
-    try { localStorage.removeItem("mm-name"); localStorage.removeItem("mm-avatar"); } catch (_) {}
+    try { localStorage.removeItem("mm-name"); localStorage.removeItem("mm-avatar"); localStorage.removeItem("mm-pic"); } catch (_) {}
     $("aEmail").value = ""; setAuthMode(false);
   });
   try { if (!localStorage.getItem("mm-has-account")) { setAuthMode(true); showWelcome(true); } else setAuthMode(false); } catch (_) {}
@@ -365,7 +366,7 @@
       else { legacySettings = true; d = { currency: set.data.currency, expense_cats: set.data.expense_cats, income_cats: set.data.income_cats, budgets: set.data.budgets, display_name: set.data.display_name, theme: set.data.theme, avatar: set.data.avatar, skin: set.data.skin }; }
       // Older accounts kept only a symbol: "Rs" means the Mauritian rupee.
       if (d) st.settings = { currency: d.currency || "Rs", expenseCats: d.expense_cats || clone(DEFAULTS.expenseCats), incomeCats: d.income_cats || clone(DEFAULTS.incomeCats), budgets: d.budgets || {},
-        name: d.display_name || "", theme: d.theme || "emerald", avatar: d.avatar || "girl", skin: d.skin || "brown", home: d.home || "MUR", look: d.look || 0, lang: d.lang || "" };
+        name: d.display_name || "", theme: d.theme || "emerald", avatar: d.avatar || "girl", skin: d.skin || "brown", home: d.home || "MUR", look: d.look || 0, lang: d.lang || "", pic: d.pic || "", photo: d.photo || "" };
       // The language this person chose follows them to other phones.
       if (d && d.lang && d.lang !== I18N.lang) I18N.set(d.lang, true);
       // Emerald became the default look: move every account to it once. People can switch back in Settings.
@@ -389,7 +390,7 @@
   }
   async function saveSettings() {
     await putEnc("settings", { currency: st.settings.currency, expense_cats: st.settings.expenseCats, income_cats: st.settings.incomeCats, budgets: st.settings.budgets || {},
-      display_name: st.settings.name || "", theme: st.settings.theme, avatar: st.settings.avatar, skin: st.settings.skin, home: home(), look: st.settings.look || 2, lang: st.settings.lang || I18N.lang });
+      display_name: st.settings.name || "", theme: st.settings.theme, avatar: st.settings.avatar, skin: st.settings.skin, home: home(), look: st.settings.look || 2, lang: st.settings.lang || I18N.lang, pic: st.settings.pic || "", photo: st.settings.photo || "" });
     st.hasSettingsRow = true;
   }
   let lastNowM = ym(new Date());
@@ -405,14 +406,22 @@
   function sums(list) { let i = 0, o = 0; for (const t of list) { if (t.type === "income") i += t.amount; else o += t.amount; } return { i, o }; }
 
   /* ---------- look: theme + avatar ---------- */
+  // Profile pictures: a 3D avatar (girl / boy in a skin tone), a picture from the app's collection, or the person's own photo.
+  const PROFILE_LIB = []; // file names in icons/profiles/, e.g. "ama.jpg"
+  function picOf(s) {
+    if (s.pic === "photo" && s.photo) return { src: s.photo, img: true };
+    if (s.pic && s.pic.startsWith("lib:")) return { src: "icons/profiles/" + s.pic.slice(4), img: true };
+    return { src: avatarSrc(s.avatar, s.skin), img: false };
+  }
+  function showPic(el, p) { el.src = p.src; el.classList.toggle("pic", p.img); }
   function avatarSrc(kind, skin) { return "icons/avatars/" + (kind === "boy" ? "boy" : "girl") + "-" + (["deep", "brown", "tan", "light"].includes(skin) ? skin : "brown") + ".png"; }
   function applyLook() {
     const s = st.settings, theme = ["sky", "blush", "emerald"].includes(s.theme) ? s.theme : "emerald";
     document.documentElement.dataset.theme = theme;
-    try { localStorage.setItem("mm-theme", theme); localStorage.setItem("mm-avatar", s.avatar + "|" + s.skin); localStorage.setItem("mm-name", s.name || ""); } catch (_) {}
+    const pic = picOf(s);
+    try { localStorage.setItem("mm-theme", theme); localStorage.setItem("mm-avatar", s.avatar + "|" + s.skin); localStorage.setItem("mm-pic", JSON.stringify(pic)); localStorage.setItem("mm-name", s.name || ""); } catch (_) {}
     const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = { sky: "#EAF1FC", blush: "#F8F0EB", emerald: "#F3F7F5" }[theme];
-    const src = avatarSrc(s.avatar, s.skin);
-    $("meAvatar").src = src; $("authAvatar").src = src;
+    showPic($("meAvatar"), pic); showPic($("authAvatar"), pic);
     const h = new Date().getHours();
     $("greet").textContent = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
     $("meName").textContent = s.name || "there";
@@ -1958,7 +1967,7 @@
   let lookBefore = null;
   function openSettings(welcome) {
     welcome = welcome === true;
-    lookBefore = { theme: st.settings.theme, avatar: st.settings.avatar, skin: st.settings.skin, name: st.settings.name };
+    lookBefore = { theme: st.settings.theme, avatar: st.settings.avatar, skin: st.settings.skin, name: st.settings.name, pic: st.settings.pic, photo: st.settings.photo };
     renderSettings();
     $("setTitle").textContent = welcome ? "Set up your profile" : "Settings";
     $("setIntro").classList.toggle("hidden", !welcome);
@@ -1971,12 +1980,36 @@
   function renderLookPickers() {
     const s = st.settings;
     document.querySelectorAll("#sTheme .themeopt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === s.theme)));
-    $("sAvatar").innerHTML = ["girl", "boy"].map(k => '<button type="button" data-v="' + k + '" aria-pressed="' + (s.avatar === k) + '" aria-label="' + (k === "girl" ? "Girl avatar" : "Boy avatar") + '"><img src="' + avatarSrc(k, s.skin) + '" alt=""></button>').join("");
+    const kidOn = !s.pic || (s.pic === "photo" && !s.photo);
+    $("sAvatar").innerHTML = ["girl", "boy"].map(k => '<button type="button" data-v="' + k + '" aria-pressed="' + (kidOn && s.avatar === k) + '" aria-label="' + (k === "girl" ? "Girl avatar" : "Boy avatar") + '"><img src="' + avatarSrc(k, s.skin) + '" alt=""></button>').join("") +
+      PROFILE_LIB.map(f => '<button type="button" data-lib="' + esc(f) + '" aria-pressed="' + (s.pic === "lib:" + f) + '" aria-label="Profile picture"><img class="pic" src="icons/profiles/' + esc(f) + '" alt=""></button>').join("") +
+      (s.photo ? '<button type="button" data-photo="1" aria-pressed="' + (s.pic === "photo") + '" aria-label="My photo"><img class="pic" src="' + s.photo + '" alt=""></button>' : "") +
+      '<button type="button" class="upl" data-upload="1" aria-label="Upload a photo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>' + (s.photo ? "New photo" : "Upload") + '</span></button>';
+    $("sSkinRow").classList.toggle("hidden", !kidOn);
     const tones = { deep: "#6E3F27", brown: "#9A5C37", tan: "#C98F62", light: "#E2AE8A" };
     $("sSkin").innerHTML = Object.keys(tones).map(k => '<button type="button" data-v="' + k + '" aria-pressed="' + (s.skin === k) + '" aria-label="' + k + ' skin tone" style="background:' + tones[k] + '"></button>').join("");
   }
   $("sTheme").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (!b) return; st.settings.theme = b.dataset.v; applyLook(); renderLookPickers(); });
-  $("sAvatar").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (!b) return; st.settings.avatar = b.dataset.v; applyLook(); renderLookPickers(); });
+  $("sAvatar").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.upload) { $("picIn").value = ""; $("picIn").click(); return; }
+    if (b.dataset.v) { st.settings.avatar = b.dataset.v; st.settings.pic = ""; }
+    else if (b.dataset.lib) st.settings.pic = "lib:" + b.dataset.lib;
+    else if (b.dataset.photo) st.settings.pic = "photo";
+    applyLook(); renderLookPickers();
+  });
+  // A photo is cut to a square, made small (about 30 KB) and kept inside the person's encrypted settings.
+  $("picIn").addEventListener("change", async () => {
+    const f = $("picIn").files[0]; if (!f) return;
+    try {
+      const bmp = await createImageBitmap(f);
+      const side = Math.min(bmp.width, bmp.height), size = 320, cv = document.createElement("canvas");
+      cv.width = cv.height = size;
+      cv.getContext("2d").drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, size, size);
+      st.settings.photo = cv.toDataURL("image/jpeg", 0.82); st.settings.pic = "photo";
+      applyLook(); renderLookPickers();
+    } catch (_) { toast("That photo couldn't be opened. Try a JPG or PNG."); }
+  });
   $("sSkin").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (!b) return; st.settings.skin = b.dataset.v; applyLook(); renderLookPickers(); });
   $("setOv").addEventListener("click", async e => {
     if (e.target === $("setOv")) return closeSettings();
@@ -1991,7 +2024,7 @@
     const name = $("sName").value.trim().slice(0, 40);
     $("setOv").classList.remove("open");
     const b = lookBefore || {};
-    const changed = newHome !== home() || cur !== st.settings.currency || name !== (st.settings.name || "") || b.theme !== st.settings.theme || b.avatar !== st.settings.avatar || b.skin !== st.settings.skin;
+    const changed = newHome !== home() || cur !== st.settings.currency || name !== (st.settings.name || "") || b.theme !== st.settings.theme || b.avatar !== st.settings.avatar || b.skin !== st.settings.skin || b.pic !== st.settings.pic || b.photo !== st.settings.photo;
     st.settings.currency = cur; st.settings.home = newHome; st.settings.name = name;
     applyLook(); render();
     if (changed) { try { await saveSettings(); } catch (e) { toast("Couldn't save your settings. Check your connection."); } }

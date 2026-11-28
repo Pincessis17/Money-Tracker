@@ -467,3 +467,12 @@ body.welcoming { background: linear-gradient(180deg, #D3EAF6 0%, #E0EDF3 55%, #F
 .wfoot .wgo { border-radius: 999px; box-shadow: 0 12px 26px rgba(15,90,60,0.28); }
 .welcome { padding-bottom: 0; }
 #authView:has(.welcome:not(.hidden)) { padding-bottom: 0; }
+
+/* spending limits */
+.typetoggle.three { grid-template-columns: repeat(3, minmax(0, 1fr)); border-radius: 16px; }
+.typetoggle.three button { border-radius: 12px; font-size: 13.5px; padding: 9px 4px; }
+.typetoggle button.on { background: var(--surface); color: var(--accent-ink); box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+.budget .lwhen { display: block; font-size: 11.5px; font-weight: 500; color: var(--muted); }
+.budget .name { align-items: flex-start; }
+.budget.ended { opacity: .7; }
+.budget .name .dot { margin-top: 6px; flex: none; }

@@ -143,7 +143,7 @@
     </section>
 
     <section class="card">
-      <div class="card-head"><h2>Budgets</h2><button type="button" class="link" data-go="plans">See all</button></div>
+      <div class="card-head"><h2>Spending limits</h2><button type="button" class="link" data-go="plans">See all</button></div>
       <div id="homeBudgets"></div>
     </section>
 
@@ -187,19 +187,19 @@
     </section>
   </section>
 
-  <section class="view hidden" id="view-plans" aria-label="Plans and budgets">
-    <header class="pagehead"><h1 class="display">Plans &amp; budgets</h1></header>
+  <section class="view hidden" id="view-plans" aria-label="Plans">
+    <header class="pagehead"><h1 class="display">Plans</h1></header>
     <section class="card" id="listsCard">
       <div class="card-head"><h2>Checklists</h2><button type="button" class="pillbtn" id="addList">+ New list</button></div>
       <div id="listsWrap"></div>
     </section>
     <section class="card" id="plansCard">
-      <div class="card-head"><h2>Set aside</h2><button type="button" class="pillbtn" id="addPlan">+ New plan</button></div>
+      <div class="card-head"><h2>Set aside</h2><button type="button" class="pillbtn" id="addPlan">+ Set aside</button></div>
       <div id="planSum"></div>
       <div id="planList"></div>
     </section>
     <section class="card" id="budgetCard">
-      <div class="card-head"><h2>Monthly budgets</h2><button type="button" class="pillbtn" id="addBudget">+ Set budget</button></div>
+      <div class="card-head"><h2>Spending limits</h2><button type="button" class="pillbtn" id="addBudget">+ New limit</button></div>
       <div id="budgetList"></div>
     </section>
   </section>
@@ -340,14 +340,14 @@
 <div class="overlay" id="planOv" role="dialog" aria-modal="true" aria-labelledby="planTitle">
   <form class="sheet" id="planForm" novalidate>
     <h2 id="planTitle">New plan</h2>
-    <div class="sub">Set money aside for a payment, or for spending over a few days, so it doesn't go on something else.</div>
-    <div class="field"><label for="pTitle">What it's for</label><input id="pTitle" placeholder="e.g. Rent for December, Bus fare this week" autocomplete="off" maxlength="80"></div>
+    <div class="sub">Keep money aside for a bill or something you're saving for, so it doesn't get spent on something else. Tick it when you pay.</div>
+    <div class="field"><label for="pTitle">What it's for</label><input id="pTitle" placeholder="e.g. Rent for December, Mum's birthday gift" autocomplete="off" maxlength="80"></div>
     <div class="field"><label for="pAmt">Amount (<span class="curLbl">Rs</span>)</label><input id="pAmt" class="big" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
     <div class="ask">Category</div>
     <div class="chips" id="pChips"></div>
     <div class="newcat hidden" id="pNewRow"><input id="pNewCat" class="search" maxlength="40" placeholder="New category, e.g. Hair, Church, Eban" aria-label="New category name"><button type="button" class="btn" id="pNewAdd">Add</button></div>
-    <div class="ask">Is it one payment or a time period?</div>
-    <div class="typetoggle" id="pKind">
+    <div class="ask hidden">Is it one payment or a time period?</div>
+    <div class="typetoggle hidden" id="pKind">
       <button type="button" data-k="once">One payment</button>
       <button type="button" data-k="period">A time period</button>
     </div>
@@ -368,7 +368,7 @@
       <button type="button" class="btn ghost hidden" id="pUndo">Mark not paid</button>
       <div class="right">
         <button type="button" class="btn ghost" id="pCancel">Cancel</button>
-        <button type="submit" class="btn primary" id="pSave">Save plan</button>
+        <button type="submit" class="btn primary" id="pSave">Save</button>
       </div>
     </div>
   </form>
@@ -378,18 +378,36 @@
 <!-- Budget sheet -->
 <div class="overlay" id="budOv" role="dialog" aria-modal="true" aria-labelledby="budTitle">
   <form class="sheet" id="budForm" novalidate>
-    <h2 id="budTitle">Set a monthly budget</h2>
-    <div class="sub">Choose a category and how much you allow for it each month. Spending in that category counts down automatically, and it starts fresh on the 1st.</div>
+    <h2 id="budTitle">New spending limit</h2>
+    <div class="sub">Choose a category and how much you allow. Everything you spend in it counts down automatically.</div>
     <div class="ask">Category</div>
     <div class="chips" id="bChips"></div>
     <div class="newcat hidden" id="bNewRow"><input id="bNewCat" class="search" maxlength="40" placeholder="New category, e.g. Hair, Church, Eban" aria-label="New category name"><button type="button" class="btn" id="bNewAdd">Add</button></div>
-    <div class="field"><label for="bAmt">Amount per month (<span class="curLbl">Rs</span>)</label><input id="bAmt" class="big" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+    <div class="ask">How often does it start again?</div>
+    <div class="typetoggle three" id="lKind">
+      <button type="button" data-k="month">Every month</button>
+      <button type="button" data-k="week">Every week</button>
+      <button type="button" data-k="dates">Specific days</button>
+    </div>
+    <div id="lWeek" class="hidden"><div class="chips" id="lWeekDays">
+      <button type="button" class="chip" data-w="7">Mon – Sun</button>
+      <button type="button" class="chip" data-w="5">Mon – Fri</button>
+    </div></div>
+    <div id="lDates" class="hidden" style="display:grid;gap:10px">
+      <div class="chips" id="lQuick"></div>
+      <div class="row2">
+        <div class="field"><label for="lStart">From</label><input id="lStart" type="date"></div>
+        <div class="field"><label for="lEnd">To</label><input id="lEnd" type="date"></div>
+      </div>
+    </div>
+    <div class="field"><label for="bAmt" id="bAmtLbl">Amount per month</label><input id="bAmt" class="big" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+    <div class="sub" id="lHint"></div>
     <div class="err" id="bErr"></div>
     <div class="actions">
-      <button type="button" class="btn danger hidden" id="bDel">Remove budget</button>
+      <button type="button" class="btn danger hidden" id="bDel">Remove limit</button>
       <div class="right">
         <button type="button" class="btn ghost" id="bCancel">Cancel</button>
-        <button type="submit" class="btn primary" id="bSave">Save budget</button>
+        <button type="submit" class="btn primary" id="bSave">Save limit</button>
       </div>
     </div>
   </form>

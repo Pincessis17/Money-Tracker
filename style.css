@@ -646,3 +646,53 @@ body.welcoming { background: linear-gradient(180deg, #D3EAF6 0%, #E0EDF3 55%, #F
 
 /* offline / changes waiting: a small amber dot before the sync note */
 body.offline .sync::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #f0a630; margin-right: 6px; vertical-align: 1px; }
+
+/* ---------- welcome back (after 30 minutes away) ---------- */
+@font-face { font-family: "Great Vibes"; src: url(vendor/great-vibes.woff2) format("woff2"); font-display: block; }
+.wback { position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; overflow: hidden;
+  background: radial-gradient(120% 80% at 50% 38%, var(--wb-s1) 0%, var(--wb-s2) 55%, var(--wb-s3) 100%); -webkit-tap-highlight-color: transparent; }
+.wback .wbglow { position: absolute; width: 440px; height: 440px; left: 50%; top: 38%; transform: translate(-50%, -50%); background: radial-gradient(circle, var(--wb-glow) 0%, transparent 62%); opacity: 0; }
+.wback .wbav { position: relative; width: 124px; height: 124px; opacity: 0; transform: scale(.6); }
+.wback .wbav img { position: absolute; inset: 10px; width: 104px; height: 104px; border-radius: 50%; object-fit: cover; background: var(--wb-avbg); }
+.wback .wbav svg { position: absolute; inset: 0; width: 124px; height: 124px; }
+.wback .wbav circle { fill: none; stroke: url(#wbRing); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 377; stroke-dashoffset: 377; transform: rotate(-90deg); transform-origin: center; }
+.wback .wbscript { width: min(330px, 88vw); height: 120px; margin-top: 18px; overflow: visible; }
+.wback .wbscript text { font-family: "Great Vibes", cursive; font-size: 64px; fill: url(#wbTxt); fill-opacity: 0; stroke: var(--wb-stroke); stroke-width: 1.1; stroke-dasharray: 1400; stroke-dashoffset: 1400; }
+.wback .wbname { font-family: var(--font-body); font-weight: 700; font-size: 24px; color: var(--wb-name); margin-top: 2px; opacity: 0; transform: translateY(10px); text-align: center; padding: 0 24px; }
+.wback .wbwhen { font-family: var(--font-body); font-size: 13px; color: var(--wb-when); margin-top: 4px; opacity: 0; transform: translateY(10px); text-align: center; }
+.wback .wbskip { position: absolute; bottom: calc(34px + env(safe-area-inset-bottom)); font-size: 12px; color: var(--wb-when); opacity: 0; letter-spacing: .04em; }
+.wback .wbbar { position: absolute; bottom: calc(22px + env(safe-area-inset-bottom)); left: 50%; width: 64px; height: 3px; margin-left: -32px; border-radius: 3px; background: rgba(255,255,255,.15); overflow: hidden; }
+.wback .wbbar i { display: block; height: 100%; width: 0; background: var(--wb-stroke); }
+.wback .wbshine { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,.16) 50%, transparent 60%); transform: translateX(-120%); }
+.wback.play .wbglow { animation: wbFade 1.4s .1s ease forwards; }
+.wback.play .wbav { animation: wbPop .9s .3s cubic-bezier(.2,1.4,.4,1) forwards; }
+.wback.play .wbav circle { animation: wbDraw 1.4s .5s ease-out forwards; }
+.wback.play .wbscript text { animation: wbDraw 2.4s 1.2s cubic-bezier(.45,.05,.35,1) forwards, wbFill .9s 3.1s ease forwards; }
+.wback.play .wbname { animation: wbUp .7s 3.4s ease forwards; }
+.wback.play .wbwhen { animation: wbUp .7s 3.75s ease forwards; }
+.wback.play .wbskip { animation: wbFade .6s 1.5s ease forwards; }
+.wback.play .wbbar i { animation: wbGrow 5.6s .1s linear forwards; }
+.wback.play .wbshine { animation: wbSweep 1.4s 4.1s ease-in-out forwards; }
+.wback.out { animation: wbLeave .75s ease forwards; pointer-events: none; }
+@keyframes wbFade { to { opacity: 1; } }
+@keyframes wbPop { to { opacity: 1; transform: scale(1); } }
+@keyframes wbDraw { to { stroke-dashoffset: 0; } }
+@keyframes wbFill { to { fill-opacity: 1; stroke-opacity: .35; } }
+@keyframes wbUp { to { opacity: 1; transform: none; } }
+@keyframes wbGrow { to { width: 100%; } }
+@keyframes wbSweep { to { transform: translateX(120%); } }
+@keyframes wbLeave { to { opacity: 0; transform: scale(1.06); visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) {
+  .wback.play * { animation: none !important; }
+  .wback.play .wbglow, .wback.play .wbav, .wback.play .wbname, .wback.play .wbwhen, .wback.play .wbskip { opacity: 1; transform: none; }
+  .wback.play .wbav circle, .wback.play .wbscript text { stroke-dashoffset: 0; fill-opacity: 1; stroke-opacity: .35; }
+  .wback.out { animation: wbFadeOut .4s ease forwards; }
+  @keyframes wbFadeOut { to { opacity: 0; visibility: hidden; } }
+}
+/* colours per theme */
+:root, .wback { --wb-s1:#18734F; --wb-s2:#0B4F37; --wb-s3:#03251A; --wb-glow:rgba(120,230,170,.28); --wb-stroke:#CFF5E1; --wb-t1:#FFFFFF; --wb-t2:#BDEBD2; --wb-t3:#7FD3A8; --wb-name:#fff; --wb-when:rgba(225,250,236,.72); --wb-avbg:#DDF3E7; --wb-r1:#9BE8C0; --wb-r2:#FFFFFF; }
+[data-theme="blush"] .wback { --wb-s1:#B3546F; --wb-s2:#7A2E46; --wb-s3:#3A1220; --wb-glow:rgba(255,190,205,.30); --wb-stroke:#FFE1E8; --wb-t1:#FFFFFF; --wb-t2:#FFD3DE; --wb-t3:#F3A6B8; --wb-name:#fff; --wb-when:rgba(255,232,238,.72); --wb-avbg:#FBE3E9; --wb-r1:#FFC2D1; --wb-r2:#FFFFFF; }
+[data-theme="sky"] .wback { --wb-s1:#4A86DE; --wb-s2:#24569F; --wb-s3:#0B2350; --wb-glow:rgba(170,210,255,.30); --wb-stroke:#DDEBFF; --wb-t1:#FFFFFF; --wb-t2:#CFE2FF; --wb-t3:#94BDF5; --wb-name:#fff; --wb-when:rgba(225,238,255,.75); --wb-avbg:#E2EDFC; --wb-r1:#A9CBFA; --wb-r2:#FFFFFF; }
+[data-theme="onyx"] .wback { --wb-s1:#24211B; --wb-s2:#100F0D; --wb-s3:#000; --wb-glow:rgba(212,175,55,.22); --wb-stroke:#E9D28A; --wb-t1:#FFF6D8; --wb-t2:#E8C766; --wb-t3:#A8841F; --wb-name:#F5EBCB; --wb-when:rgba(233,210,138,.68); --wb-avbg:#2A261D; --wb-r1:#D4AF37; --wb-r2:#FFF3C4; }
+[data-theme="ember"] .wback { --wb-s1:#2A1A12; --wb-s2:#120C09; --wb-s3:#000; --wb-glow:rgba(255,140,60,.24); --wb-stroke:#FFC8A0; --wb-t1:#FFF1E6; --wb-t2:#FFB27A; --wb-t3:#E06A1F; --wb-name:#FFE9DA; --wb-when:rgba(255,200,160,.7); --wb-avbg:#2B1D15; --wb-r1:#FF8A3D; --wb-r2:#FFE2CC; }
+[data-theme="midnight"] .wback { --wb-s1:#0F3A2B; --wb-s2:#071C15; --wb-s3:#020806; --wb-glow:rgba(70,220,150,.20); --wb-stroke:#9FEBC5; --wb-t1:#EFFFF6; --wb-t2:#8FE3B8; --wb-t3:#2FB57A; --wb-name:#E6FFF2; --wb-when:rgba(160,235,200,.68); --wb-avbg:#11291F; --wb-r1:#3DDC97; --wb-r2:#DFFFF0; }

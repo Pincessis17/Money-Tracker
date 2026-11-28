@@ -167,6 +167,7 @@ T = {
 "Rates": ("Devises", "Lamonnen"),
 "Main": ("Principal", "Prinsipal"),
 "Good morning": ("Bonjour", "Bonzour"),
+"Tap to skip": ("Touchez pour passer", "Tap pou sote"),
 "Good afternoon": ("Bon après-midi", "Bonapremidi"),
 "Good evening": ("Bonsoir", "Bonswar"),
 "Hello": ("Bonjour", "Bonzour"),

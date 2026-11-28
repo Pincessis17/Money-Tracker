@@ -2518,4 +2518,36 @@
   }
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForUpdate(); });
   setTimeout(checkForUpdate, 4000);
+
+  /* ---------- welcome back: shown when someone returns after 30 minutes away ---------- */
+  const AWAY = 30 * 60 * 1000;
+  let wbT = null;
+  const seenAt = () => { try { return Number(localStorage.getItem("mm-seen") || 0); } catch (_) { return 0; } };
+  const markSeen = () => { try { localStorage.setItem("mm-seen", String(Date.now())); } catch (_) {} };
+  function welcomeBack() {
+    const k = knownUser(); let p = null;
+    try { p = JSON.parse(localStorage.getItem("mm-pic") || "null"); } catch (_) {}
+    const a = k.avatar.split("|");
+    showPic($("wbPic"), p && p.src ? p : { src: avatarSrc(a[0], a[1]), img: false });
+    $("wbName").textContent = k.name || "";
+    const h = new Date().getHours();
+    $("wbWhen").textContent = (h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening") + " · " + new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+    const w = $("wback");
+    w.classList.remove("hidden", "out", "play"); void w.offsetWidth; w.classList.add("play");
+    markSeen();
+    clearTimeout(wbT); wbT = setTimeout(wbClose, 5700);
+  }
+  function wbClose() {
+    const w = $("wback"); clearTimeout(wbT);
+    if (w.classList.contains("hidden") || w.classList.contains("out")) return;
+    w.classList.add("out"); setTimeout(() => { if (w.classList.contains("out")) w.classList.add("hidden"); }, 780);
+  }
+  $("wback").addEventListener("click", wbClose);
+  const dueWelcome = () => !!storedUser() && Date.now() - seenAt() >= AWAY;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") markSeen();
+    else if (dueWelcome()) welcomeBack();
+  });
+  window.addEventListener("pagehide", markSeen);
+  if (dueWelcome()) welcomeBack(); else markSeen();
 })();

@@ -1774,6 +1774,8 @@
   $("rcptOv").addEventListener("click", e => { if (e.target === $("rcptOv")) $("rcptOv").classList.remove("open"); });
 
   $("addIn").addEventListener("click", () => openEntry({ type: "income" }));
+  // Home quick buttons reuse the + menu's actions.
+  $("quick").addEventListener("click", e => { const b = e.target.closest("[data-q]"); if (b) $(b.dataset.q).click(); });
   $("addOut").addEventListener("click", () => openEntry({ type: "expense" }));
   $("txList").addEventListener("click", e => { const b = e.target.closest(".tx"); if (!b) return; const t = st.txs.find(x => x.id === b.dataset.id); if (t) openEntry({ tx: t }); });
 

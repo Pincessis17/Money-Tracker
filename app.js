@@ -55,9 +55,15 @@
 
   /* ---------- auth ---------- */
   let signUpMode = false;
+  // The last person who used the app on this phone (their look only, nothing private).
+  function knownUser() { try { return { name: localStorage.getItem("mm-name") || "", avatar: localStorage.getItem("mm-avatar") || "" }; } catch (_) { return { name: "", avatar: "" }; } }
   function setAuthMode(up) {
     signUpMode = up;
-    $("authTitle").textContent = up ? "Create your account" : "Welcome back";
+    const k = knownUser();
+    $("authTitle").textContent = up ? "Create your account" : "Welcome back" + (k.name ? ", " + k.name : "");
+    $("aNotMe").classList.toggle("hidden", up || !k.avatar);
+    const a = up ? [] : k.avatar.split("|");
+    $("authAvatar").src = a[0] ? avatarSrc(a[0], a[1]) : "icons/avatars/girl-brown.png";
     $("authSub").textContent = up ? "Start tracking your money in a minute" : "Log in to see your money";
     $("aSubmit").textContent = up ? "Create account" : "Log in";
     $("aSwitch").textContent = up ? "Already have an account? Log in" : "New here? Create an account";
@@ -135,8 +141,15 @@
     if (q.get("error")) { $("aErr").textContent = "Google sign-in didn't finish. Try again, or use your email."; history.replaceState(null, "", location.pathname); }
   })();
 
-  // A phone that has never logged in starts on "Create your account".
-  try { if (!localStorage.getItem("mm-has-account")) setAuthMode(true); } catch (_) {}
+  // A phone that has never logged in starts on the welcome screen, then "Create your account".
+  function showWelcome(on) { document.body.classList.toggle("welcoming", on); $("welcome").classList.toggle("hidden", !on); }
+  $("wStart").addEventListener("click", () => { showWelcome(false); setAuthMode(true); setTimeout(() => $("aEmail").focus(), 60); });
+  $("wSignIn").addEventListener("click", () => { showWelcome(false); setAuthMode(false); setTimeout(() => $("aEmail").focus(), 60); });
+  $("aNotMe").addEventListener("click", () => {
+    try { localStorage.removeItem("mm-name"); localStorage.removeItem("mm-avatar"); } catch (_) {}
+    $("aEmail").value = ""; setAuthMode(false);
+  });
+  try { if (!localStorage.getItem("mm-has-account")) { setAuthMode(true); showWelcome(true); } else setAuthMode(false); } catch (_) {}
   $("authForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const email = $("aEmail").value.trim(), password = $("aPass").value;
@@ -182,7 +195,7 @@
     st.user = u;
     document.body.classList.toggle("signedout", !u);
     if (u) { $("aPass").value = ""; hideCode(); try { localStorage.setItem("mm-has-account", "1"); } catch (_) {} startVault(); }
-    else { st.key = null; st.vault = null; st.lists = []; document.body.classList.remove("locked"); st.track = []; st.holds = []; st.txs = []; st.plans = []; st.settings = clone(DEFAULTS); }
+    else { if ($("welcome").classList.contains("hidden") && !signUpMode) setAuthMode(false); st.key = null; st.vault = null; st.lists = []; document.body.classList.remove("locked"); st.track = []; st.holds = []; st.txs = []; st.plans = []; st.settings = clone(DEFAULTS); }
   });
 
   /* ---------- private vault (end-to-end encryption) ---------- */
@@ -380,7 +393,7 @@
   function applyLook() {
     const s = st.settings, theme = s.theme === "sky" ? "sky" : "blush";
     document.documentElement.dataset.theme = theme;
-    try { localStorage.setItem("mm-theme", theme); localStorage.setItem("mm-avatar", s.avatar + "|" + s.skin); } catch (_) {}
+    try { localStorage.setItem("mm-theme", theme); localStorage.setItem("mm-avatar", s.avatar + "|" + s.skin); localStorage.setItem("mm-name", s.name || ""); } catch (_) {}
     const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = theme === "sky" ? "#EAF1FC" : "#F8F0EB";
     const src = avatarSrc(s.avatar, s.skin);
     $("meAvatar").src = src; $("authAvatar").src = src;
@@ -388,7 +401,6 @@
     $("greet").textContent = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
     $("meName").textContent = s.name || "there";
   }
-  try { const a = (localStorage.getItem("mm-avatar") || "").split("|"); if (a[0]) $("authAvatar").src = avatarSrc(a[0], a[1]); } catch (_) {}
 
   /* ---------- tabs ---------- */
   const TABS = ["home", "journal", "plans", "rates"];

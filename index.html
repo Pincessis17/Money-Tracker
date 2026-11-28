@@ -22,6 +22,20 @@
 
 <main id="authView" class="auth">
   <div class="installslot" id="installSlotAuth"></div>
+  <section class="welcome hidden" id="welcome" aria-labelledby="wTitle">
+    <div class="wbrand"><span class="wlogo" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19c0-8 6-14 14-14 0 8-6 14-14 14z"/><path d="M5 19l7-7"/></svg></span>My Money</div>
+    <h1 class="display" id="wTitle">Take control of your money</h1>
+    <p class="sub">Spend smart, save more and reach your goals. Snap receipts, plan ahead and track any currency.</p>
+    <div class="wart" aria-hidden="true">
+      <span class="wsun"></span>
+      <img class="wkid g" src="icons/avatars/girl-brown.png" alt="" width="170" height="187">
+      <img class="wkid b" src="icons/avatars/boy-tan.png" alt="" width="150" height="165">
+      <span class="wchip c1"><b>+ Rs 6,000</b> Shift pay</span>
+      <span class="wchip c2"><i>✓</i> Rent set aside</span>
+    </div>
+    <button class="btn primary wgo" type="button" id="wStart">Get started <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+    <p class="wsign">Already have an account? <button type="button" class="linkbtn" id="wSignIn">Sign in</button></p>
+  </section>
   <div class="authart"><img id="authAvatar" src="icons/avatars/girl-brown.png" alt="" width="200" height="220"></div>
   <form class="card authcard" id="authForm" novalidate>
     <div class="authhead">
@@ -37,6 +51,7 @@
     <button class="switch hidden" type="button" id="aResend">Resend confirmation email</button>
     <button class="btn primary" type="submit" id="aSubmit">Log in</button>
     <button class="switch" type="button" id="aSwitch">New here? Create an account</button>
+    <button class="linkbtn hidden" type="button" id="aNotMe">Not you? Use another account</button>
   </form>
   <form class="card authcard hidden" id="codeForm" novalidate>
     <div class="authhead">

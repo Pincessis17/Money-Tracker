@@ -613,7 +613,7 @@
       // Older accounts kept only a symbol: "Rs" means the Mauritian rupee.
       if (d) st.settings = { currency: d.currency || "Rs", expenseCats: d.expense_cats || clone(DEFAULTS.expenseCats), incomeCats: d.income_cats || clone(DEFAULTS.incomeCats), budgets: d.budgets || {},
         name: d.display_name || "", theme: d.theme || "emerald", avatar: d.avatar || "girl", skin: d.skin || "brown", home: d.home || "MUR", look: d.look || 0, lang: d.lang || "", pic: d.pic || "", photo: d.photo || "",
-        rcode: d.rcode || "", rsaved: !!d.rsaved, skipSetup: !!d.skipSetup, autoName: !!d.autoName };
+        rcode: d.rcode || "", rsaved: !!d.rsaved, skipSetup: !!d.skipSetup, autoName: !!d.autoName, recurring: Array.isArray(d.recurring) ? d.recurring : [] };
       // The language this person chose follows them to other phones.
       if (d && d.lang && d.lang !== I18N.lang) I18N.set(d.lang, true);
       // Emerald became the default look: move every account to it once. People can switch back in Settings.
@@ -634,11 +634,12 @@
     if (!offline) loadRates();
     if (offline) syncState(); else { $("syncNote").textContent = "Synced " + new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }); syncState(); }
     render();
+    runRepeats();
   }
   async function saveSettings() {
     await putEnc("settings", { currency: st.settings.currency, expense_cats: st.settings.expenseCats, income_cats: st.settings.incomeCats, budgets: st.settings.budgets || {},
       display_name: st.settings.name || "", theme: st.settings.theme, avatar: st.settings.avatar, skin: st.settings.skin, home: home(), look: st.settings.look || 2, lang: st.settings.lang || I18N.lang, pic: st.settings.pic || "", photo: st.settings.photo || "",
-      rcode: st.settings.rcode || "", rsaved: !!st.settings.rsaved, skipSetup: !!st.settings.skipSetup, autoName: !!st.settings.autoName });
+      rcode: st.settings.rcode || "", rsaved: !!st.settings.rsaved, skipSetup: !!st.settings.skipSetup, autoName: !!st.settings.autoName, recurring: st.settings.recurring || [] });
     st.hasSettingsRow = true;
   }
   let lastNowM = ym(new Date());
@@ -721,8 +722,80 @@
   function txRow(t) {
     const inc = t.type === "income", col = catColor(t.category || "Other", t.type);
     return '<button class="tx" data-id="' + esc(t.id) + '"><span class="ic" style="background:color-mix(in srgb, ' + col + ' 18%, var(--surface));color:' + col + '">' + catIcon(t.category) + '</span>' +
-      '<span style="min-width:0"><div class="t1">' + esc(t.note || t.category || "Entry") + '</div><div class="t2">' + esc(t.category || "Uncategorised") + (t.receipt_path ? " · receipt" : "") + '</div></span>' +
+      '<span style="min-width:0"><div class="t1">' + esc(t.note || t.category || "Entry") + '</div><div class="t2">' + esc(t.category || "Uncategorised") + (t.receipt_path ? " · receipt" : "") + (t.rep ? " · ↻" : "") + '</div></span>' +
       '<span class="amt num ' + (inc ? "in" : "out") + '">' + (inc ? "+" : "−") + esc(money(t.amount)) + '</span></button>';
+  }
+
+  /* ---------- repeating entries (salary, rent, subscriptions) ----------
+     A rule lives in the (encrypted) settings. Each time it's due, a normal entry is added.
+     Entry ids come from the rule and date, so two phones adding the same one can't double it. */
+  const reps = () => st.settings.recurring || (st.settings.recurring = []);
+  function addPeriod(dateStr, every, startDay) {
+    const d = new Date(dateStr + "T12:00:00");
+    if (every === "week") d.setDate(d.getDate() + 7);
+    else { const y = d.getFullYear(), m = d.getMonth() + 1, last = new Date(y, m + 1, 0).getDate(); d.setFullYear(y, m, Math.min(startDay, last)); }
+    return ym(d) + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  const nextDue = r => addPeriod(r.upto, r.every, Number(r.start.slice(8, 10)));
+  async function occId(ruleId, date) {
+    const h = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ruleId + "|" + date)));
+    h[6] = (h[6] & 0x0f) | 0x40; h[8] = (h[8] & 0x3f) | 0x80;
+    const x = [...h.slice(0, 16)].map(b => b.toString(16).padStart(2, "0")).join("");
+    return x.slice(0, 8) + "-" + x.slice(8, 12) + "-" + x.slice(12, 16) + "-" + x.slice(16, 20) + "-" + x.slice(20, 32);
+  }
+  let repRunning = false;
+  async function runRepeats() {
+    if (repRunning || !st.key) return;
+    repRunning = true;
+    try {
+      const t = today(); let added = 0, moved = false;
+      for (const r of reps()) {
+        let guard = 0;
+        while (nextDue(r) <= t && guard++ < 120) {
+          const date = nextDue(r), id = await occId(r.id, date);
+          if (!st.txs.some(x => x.id === id)) {
+            const tx = { id, type: r.type, amount: r.amount, category: r.category, note: r.note || "", date, receipt_path: null, rep: r.id, created_at: new Date().toISOString() };
+            await putEnc("transactions", tx);
+            st.txs = [tx, ...st.txs]; added++;
+          }
+          r.upto = date; moved = true;
+        }
+      }
+      if (moved) await saveSettings();
+      if (added) { render(); toast(added === 1 ? T("1 repeating entry added") : added + " " + T("repeating entries added")); }
+    } catch (_) {} finally { repRunning = false; }
+  }
+  const everyText = r => r.every === "week"
+    ? "Every " + new Date(r.start + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long" })
+    : "Every month on the " + ordinal(Number(r.start.slice(8, 10)));
+  function ordinal(n) { const s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+  function renderRepeats() {
+    const list = reps();
+    if (!list.length) { $("repList").innerHTML = '<div class="empty">Nothing repeating yet. When you add your salary, rent or a subscription, choose “Every month” and it will add itself.</div>'; return; }
+    $("repList").innerHTML = list.map(r => {
+      const inc = r.type === "income", nd = new Date(nextDue(r) + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+      return '<div class="plan"><span class="tick period" aria-hidden="true" style="color:' + catColor(r.category, r.type) + '"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></svg></span>' +
+        '<div class="body"><div class="t1">' + esc(r.note || r.category) + '</div><div class="t2">' + esc(everyText(r)) + ' · next ' + esc(nd) + '</div></div>' +
+        '<span class="amt num ' + (inc ? "in" : "out") + '">' + (inc ? "+" : "−") + esc(money(r.amount)) + '</span>' +
+        '<button type="button" class="iconb" data-rstop="' + esc(r.id) + '" aria-label="Stop repeating ' + esc(r.note || r.category) + '">' + BIN + '</button></div>';
+    }).join("");
+  }
+  $("repList").addEventListener("click", async e => {
+    const b = e.target.closest("[data-rstop]"); if (!b) return;
+    if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.classList.add("armed"); toast(T("Tap the bin again to stop it. Entries already added stay.")); setTimeout(() => { b.dataset.confirm = ""; b.classList.remove("armed"); }, 3000); return; }
+    st.settings.recurring = reps().filter(r => r.id !== b.dataset.rstop);
+    render();
+    try { await saveSettings(); toast(T("Stopped. Entries already added stay in your journal.")); } catch (_) { toast("Couldn't save. Try again."); }
+  });
+  $("repChips").addEventListener("click", e => {
+    const b = e.target.closest("[data-r]"); if (!b) return;
+    ed.repeat = b.dataset.r; syncRepeat();
+  });
+  function syncRepeat() {
+    document.querySelectorAll("#repChips [data-r]").forEach(c => c.setAttribute("aria-pressed", String(c.dataset.r === (ed.repeat || ""))));
+    const d = $("fDate").value || today();
+    $("repHint").classList.toggle("hidden", !ed.repeat);
+    if (ed.repeat) $("repHint").textContent = everyText({ every: ed.repeat, start: d }) + ", starting " + new Date(d + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" }) + ". You can stop it in Plans.";
   }
 
   /* ---------- gentle setup cards on Home (instead of forcing setup at sign-up) ---------- */
@@ -792,6 +865,7 @@
     renderHomeBudgets();
     renderRecent();
     renderPlans(net);
+    renderRepeats();
     renderLists();
     renderBudgets(cur);
     renderFx(net);
@@ -2061,6 +2135,12 @@
     $("viewRcpt").classList.toggle("hidden", !(t && t.receipt_path));
     $("rBox").classList.toggle("hidden", !ed.fromReceipt);
     $("newCatRow").classList.add("hidden");
+    ed.repeat = "";
+    const rule = t && t.rep ? reps().find(r => r.id === t.rep) : null;
+    $("repRow").classList.toggle("hidden", !!t);
+    $("repNote").classList.toggle("hidden", !rule);
+    if (rule) $("repNote").textContent = "↻ " + everyText(rule) + ". Changing this entry doesn't change the next ones. Stop it in Plans.";
+    syncRepeat();
     syncType();
     $("entryOv").classList.add("open");
     if (!ed.fromReceipt && !t) setTimeout(() => $("fAmt").focus(), 50);
@@ -2084,6 +2164,7 @@
     updateBudgetHint();
   }
 
+  $("fDate").addEventListener("change", () => { if (ed.repeat) syncRepeat(); });
   $("typeToggle").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; if (ed.type !== b.dataset.t) { ed.type = b.dataset.t; ed.category = null; ed.suggested = null; if (ed.type === "income") ed.planId = null; syncType(); } });
   $("chips").addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
@@ -2121,8 +2202,12 @@
       }
       const row = { type: ed.type, amount: Math.round(amt * 100) / 100, category: ed.category, note: $("fNote").value.trim().slice(0, 120), date: $("fDate").value, receipt_path };
       const prevTx = ed.id ? st.txs.find(t => t.id === ed.id) : null;
-      const saved = { ...row, id: ed.id || uuid(), created_at: prevTx ? prevTx.created_at : new Date().toISOString() };
+      let rule = null;
+      if (!ed.id && ed.repeat) rule = { id: uuid(), every: ed.repeat, type: row.type, amount: row.amount, category: row.category, note: row.note, start: row.date, upto: row.date };
+      const saved = { ...row, id: rule ? await occId(rule.id, row.date) : (ed.id || uuid()), created_at: prevTx ? prevTx.created_at : new Date().toISOString() };
+      if (rule) saved.rep = rule.id; else if (prevTx && prevTx.rep) saved.rep = prevTx.rep;
       await putEnc("transactions", saved);
+      if (rule) { reps().push(rule); saveSettings().then(() => runRepeats()).catch(() => {}); }
       st.txs = ed.id ? st.txs.map(t => t.id === ed.id ? saved : t) : [saved, ...st.txs];
       const wasEdit = !!ed.id, planId = saved.type === "expense" ? ed.planId : null;
       const prevPlan = st.plans.find(x => x.paid_tx_id === saved.id);

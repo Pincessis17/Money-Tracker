@@ -435,16 +435,10 @@ body.welcoming #authView > :not(.welcome):not(.installslot) { display: none; }
 .wlogo { width: 30px; height: 30px; border-radius: 10px; background: var(--accent); color: #fff; display: grid; place-items: center; }
 .welcome h1 { font-size: 34px; line-height: 1.1; margin: 10px 0 0; }
 .welcome > .sub { margin: 0; font-size: 15px; }
-.wart { position: relative; height: 270px; margin: 6px 0; border-radius: 28px; background: var(--card); overflow: hidden; }
-.wsun { position: absolute; left: 50%; top: 44px; width: 210px; height: 210px; margin-left: -105px; border-radius: 50%; background: var(--accent-soft); }
-.wkid { position: absolute; bottom: -8px; }
-.wkid.g { left: 50%; margin-left: -128px; width: 170px; height: auto; }
-.wkid.b { left: 50%; margin-left: -6px; width: 150px; height: auto; }
-.wchip { position: absolute; padding: 7px 11px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-size: 12.5px; box-shadow: 0 6px 18px rgba(0,0,0,.08); white-space: nowrap; }
-.wchip b { color: var(--good); }
-.wchip i { font-style: normal; color: var(--good); font-weight: 700; }
-.wchip.c1 { left: 14px; top: 22px; }
-.wchip.c2 { right: 14px; top: 70px; }
+.wart { position: relative; flex: 1 1 auto; min-height: 400px; margin: 10px 0 0; border-radius: 26px; overflow: hidden; background: #EEE9DE; }
+.wsky { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.wkid { position: absolute; left: 50%; bottom: 112px; width: 190px; height: auto; margin-left: -110px; }
+.wledge { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 190px; display: block; }
 .wgo { width: 100%; padding: 15px 18px; font-size: 16px; }
 .wsign { text-align: center; margin: 0; color: var(--muted); font-size: 14px; }
 .linkbtn { border: 0; background: none; padding: 6px 2px; color: var(--accent-ink); font: inherit; font-weight: 700; }
@@ -466,3 +460,10 @@ body.welcoming #authView > :not(.welcome):not(.installslot) { display: none; }
 .quick button { border: 0; background: none; display: grid; justify-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--ink); padding: 4px 0; }
 .quick span { width: 54px; height: 54px; border-radius: 27px; background: var(--surface); border: 1px solid var(--line); color: var(--accent-ink); display: grid; place-items: center; box-shadow: var(--shadow); }
 .quick button:active span { transform: scale(.95); }
+body.welcoming { background: linear-gradient(180deg, #DCEEE9 0%, #F3F7F5 46%) fixed; }
+.welcome h1 { font-size: 34px; line-height: 1.12; }
+.wgo { border-radius: 16px; }
+.welcome { display: flex; flex-direction: column; min-height: calc(100dvh - 70px); gap: 12px; }
+.welcome .wgo, .welcome .wsign { position: relative; z-index: 2; }
+.welcome .wgo { margin: -132px 16px 0; width: auto; }
+.welcome .wsign { margin: 0 0 22px; }

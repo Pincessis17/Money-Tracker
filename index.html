@@ -109,6 +109,7 @@
   <div class="banner" id="banner"></div>
 
   <section class="view" id="view-home" aria-label="Home">
+    <div class="homehead">
     <header class="hello">
       <button type="button" class="avatarbtn" id="openSettings" aria-label="Profile and settings"><img id="meAvatar" src="icons/avatars/girl-brown.png" alt=""></button>
       <div class="hellotext"><span class="sub" id="greet">Hello</span><b class="display" id="meName">there</b></div>
@@ -118,16 +119,13 @@
     <div class="installslot" id="installSlotHome"></div>
 
     <section class="card hero">
+      <img class="wallet" src="icons/wallet.png" alt="" aria-hidden="true" width="240" height="236">
       <div class="rowb"><span class="sub" id="freeLbl">Free to spend</span><span id="keptPill"></span></div>
       <div class="bignum display num" id="freeAmt">—</div>
       <div class="sub" id="freeSub"></div>
-      <div class="tiles3">
-        <div class="tile"><span>Money in</span><b class="num good" id="kIn">—</b></div>
-        <div class="tile"><span>Spent</span><b class="num bad" id="kOut">—</b></div>
-        <div class="tile"><span>Planned</span><b class="num" id="kPlan">—</b></div>
-      </div>
-      <div class="sub" id="kOutHint"></div>
+      <div class="sub trend" id="kOutHint"></div>
     </section>
+    </div>
 
     <nav class="quick" id="quick" aria-label="Quick add">
       <button type="button" data-q="scanBtn"><span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span>Scan</button>
@@ -138,9 +136,24 @@
 
     <div id="dueAlert"></div>
 
+    <section class="card io">
+      <div class="card-head"><h2>Money in vs Expense</h2><span class="sub">This month</span></div>
+      <div class="iotiles">
+        <div class="iot"><span>Money in</span><b class="num" id="kIn">—</b><i class="iobar"><i id="ioInBar"></i></i></div>
+        <div class="iot"><span>Expense</span><b class="num" id="kOut">—</b><i class="iobar out"><i id="ioOutBar"></i></i></div>
+      </div>
+      <div class="iorow">
+        <span class="ioic in" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></span>
+        <span class="iodots" aria-hidden="true"></span>
+        <div class="ioring" id="ioRing"></div>
+        <span class="iodots" aria-hidden="true"></span>
+        <span class="ioic out" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span>
+      </div>
+    </section>
+
     <section class="card">
-      <div class="card-head"><h2>Last 7 days</h2><span class="sub" id="weekSub"></span></div>
-      <div id="weekChart"></div>
+      <div class="card-head"><h2>Spending by category</h2><span class="sub">This month</span></div>
+      <div id="catChart"></div>
     </section>
 
     <section class="card">

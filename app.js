@@ -206,7 +206,7 @@
     if ((u && u.id) === (st.user && st.user.id)) return;
     st.user = u;
     document.body.classList.toggle("signedout", !u);
-    if (u) { $("aPass").value = ""; hideCode(); try { localStorage.setItem("mm-has-account", "1"); } catch (_) {} startVault(); }
+    if (u) { $("aPass").value = ""; hideCode(); showWelcome(false); try { localStorage.setItem("mm-has-account", "1"); } catch (_) {} startVault(); }
     else { if ($("welcome").classList.contains("hidden") && !signUpMode) setAuthMode(false); st.key = null; st.vault = null; st.lists = []; document.body.classList.remove("locked"); st.track = []; st.holds = []; st.txs = []; st.plans = []; st.settings = clone(DEFAULTS); }
   });
 
@@ -484,9 +484,12 @@
     $("freeAmt").style.color = free < 0 ? "var(--bad)" : "";
     $("freeSub").textContent = planned > 0 ? "after " + money(planned) + " set aside for " + openPlans().length + (openPlans().length === 1 ? " plan" : " plans") : (cur.length ? "money in minus what you spent" : "Add money in or an expense to get started");
     $("keptPill").innerHTML = s.i > 0 ? (free >= 0 ? '<span class="pill accent">' + Math.round(free / s.i * 100) + '% kept</span>' : '<span class="pill bad">Short ' + esc(money(-free)) + '</span>') : "";
-    $("kIn").textContent = "+" + money(s.i).replace(st.settings.currency + " ", "");
-    $("kOut").textContent = "−" + money(s.o).replace(st.settings.currency + " ", "");
-    $("kPlan").textContent = money(planned).replace(st.settings.currency + " ", "");
+    $("kIn").textContent = money(s.i);
+    $("kOut").textContent = money(s.o);
+    const top = Math.max(s.i, s.o, 1);
+    $("ioInBar").style.width = (s.i / top * 100) + "%";
+    $("ioOutBar").style.width = (s.o / top * 100) + "%";
+    renderRing(s);
     const diff = s.o - p.o;
     $("kOutHint").innerHTML = p.o > 0 && cur.length ? (diff > 0 ? 'Spending is <span class="bad">' + esc(money(diff)) + ' higher</span> than last month' : 'Spending is <span class="good">' + esc(money(-diff)) + ' lower</span> than last month') : "";
     // journal summary
@@ -494,7 +497,7 @@
     $("jIn").textContent = "+" + money(js.i) + " in";
     $("jOut").textContent = "−" + money(js.o) + " out";
     renderDue();
-    renderWeek();
+    renderCatChart(cur);
     renderHomeBudgets();
     renderRecent();
     renderPlans(net);
@@ -522,6 +525,36 @@
     try { await setPlanDone(x.id, true); render(); toast("Paid · " + x.title); } catch (_) { toast("Couldn't update. Check your connection."); }
   });
 
+  // The ring in "Money in vs Expense": how much of this month's money in you still have.
+  function renderRing(s) {
+    const kept = s.i > 0 ? Math.max(0, (s.i - s.o) / s.i) : 0, pct = Math.round(kept * 100), short = s.i > 0 && s.o > s.i;
+    const C = 2 * Math.PI * 42, on = C * kept;
+    $("ioRing").innerHTML = '<svg viewBox="0 0 100 100" role="img" aria-label="' + (s.i > 0 ? pct + "% kept" : "No money in yet") + '">' +
+      '<defs><linearGradient id="ringG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--ring-a)"/><stop offset="1" stop-color="var(--ring-b)"/></linearGradient></defs>' +
+      '<circle cx="50" cy="50" r="42" fill="none" stroke="var(--tile)" stroke-width="11"/>' +
+      (on > 0 ? '<circle cx="50" cy="50" r="42" fill="none" stroke="url(#ringG)" stroke-width="11" stroke-linecap="round" stroke-dasharray="' + on.toFixed(1) + ' ' + C.toFixed(1) + '" transform="rotate(-90 50 50)"/>' : "") +
+      '</svg><div class="ringtxt"><b class="num' + (short ? " bad" : "") + '">' + (s.i > 0 ? pct + "%" : "—") + '</b><span>' + (short ? "Over" : "Kept") + '</span></div>';
+  }
+  // Bars for this month's spending, biggest categories first, with each category's icon underneath.
+  function renderCatChart(cur) {
+    const by = {};
+    for (const t of cur) if (t.type !== "income") by[t.category || "Other"] = (by[t.category || "Other"] || 0) + t.amount;
+    let rows = Object.entries(by).sort((a, b) => b[1] - a[1]);
+    if (rows.length > 6) {
+      const head = rows.slice(0, 5), rest = rows.slice(5).reduce((a, r) => a + r[1], 0), oi = head.findIndex(r => r[0] === "Other");
+      if (oi >= 0) head[oi] = ["Other", head[oi][1] + rest]; else head.push(["Other", rest]);
+      rows = head.sort((a, b) => b[1] - a[1]);
+    }
+    if (!rows.length) { $("catChart").innerHTML = '<div class="empty">No spending yet this month.</div>'; return; }
+    const rawMax = rows[0][1], mag = Math.pow(10, Math.floor(Math.log10(rawMax || 1)));
+    const max = [1, 2, 2.5, 4, 5, 10].map(x => x * mag).find(x => x >= rawMax) || rawMax;
+    const ticks = [max, max * 0.75, max * 0.5, max * 0.25, 0];
+    $("catChart").innerHTML = '<div class="cchart" role="img" aria-label="' + esc(rows.map(r => r[0] + " " + money(r[1])).join(", ")) + '">' +
+      '<div class="cax">' + ticks.map(v => '<span>' + esc(shortMoney(v)) + '</span>').join("") + '</div>' +
+      '<div class="cplot">' + ticks.map(() => '<i class="cgrid"></i>').join("") +
+      '<div class="ccols">' + rows.map(([c, v]) => '<div class="ccol"><span class="cbar" style="height:' + Math.max(2, v / max * 100).toFixed(1) + '%"><span class="ctip num">' + esc(shortMoney(v)) + '</span></span></div>').join("") + '</div></div>' +
+      '<div></div><div class="clabels">' + rows.map(([c]) => '<div><span class="cic" style="color:' + catColor(c, "expense") + '">' + catIcon(c) + '</span><span class="cname">' + esc(I18N.t(c).split(/ [&/] | \/ |\s/)[0]) + '</span></div>').join("") + '</div></div>';
+  }
   function renderWeek() {
     const t = today(), days = [];
     for (let k = 6; k >= 0; k--) { const d = shiftDay(t, -k); days.push({ d, v: st.txs.filter(x => x.type !== "income" && x.date === d).reduce((a, x) => a + x.amount, 0) }); }

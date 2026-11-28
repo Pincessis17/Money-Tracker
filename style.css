@@ -480,3 +480,66 @@ body.welcoming { background: linear-gradient(180deg, #D3EAF6 0%, #E0EDF3 55%, #F
 /* language picker on the sign-in screens */
 .langbar { justify-self: end; display: flex; align-items: center; gap: 6px; color: var(--muted); margin: -12px 0 6px; position: relative; z-index: 3; }
 .langbar select { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; color: var(--ink); }
+
+/* ---- Home: income vs expense ---- */
+:root { --ring-a: var(--accent); --ring-b: var(--accent-ink); }
+:root[data-theme="emerald"] { --ring-a: #8BD95A; --ring-b: #0F6B4B; }
+.io .iotiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.iot { padding: 12px 14px 14px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); display: grid; gap: 4px; min-width: 0; }
+.iot span { font-size: 13px; color: var(--muted); font-weight: 600; }
+.iot b { font-size: 19px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iobar { display: block; height: 7px; border-radius: 4px; background: var(--tile); overflow: hidden; margin-top: 6px; }
+.iobar i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--ring-b), var(--ring-a)); transition: width .4s; }
+.iobar.out i { background: linear-gradient(90deg, var(--ring-b), var(--ring-a)); opacity: .75; }
+.iorow { display: grid; grid-template-columns: 48px 1fr 128px 1fr 48px; align-items: center; margin-top: -6px; }
+.ioic { width: 48px; height: 48px; border-radius: 24px; display: grid; place-items: center; }
+.ioic.in { border: 2.5px solid var(--good); color: var(--good); background: var(--surface); }
+.ioic.out { background: #E53935; color: #fff; box-shadow: 0 6px 16px rgba(229,57,53,.3); }
+.iodots { height: 0; border-top: 2px dotted var(--line); margin: 0 6px; }
+.ioring { position: relative; width: 128px; height: 128px; margin-top: 4px; }
+.ioring svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 8px 16px rgba(15,70,50,.12)); }
+.ringtxt { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; line-height: 1.05; }
+.ringtxt b { font-size: 28px; font-weight: 800; }
+.ringtxt b.bad { color: var(--bad); }
+.ringtxt span { font-size: 13px; color: var(--muted); font-weight: 600; }
+
+/* ---- Home: spending by category ---- */
+.cchart { display: grid; grid-template-columns: 38px 1fr; grid-template-rows: 150px auto; column-gap: 8px; margin-top: 10px; }
+.cax { display: flex; flex-direction: column; justify-content: space-between; text-align: right; font-size: 11px; color: var(--muted); margin: -6px 0; }
+.cplot { position: relative; display: flex; flex-direction: column; justify-content: space-between; }
+.cgrid { display: block; height: 1px; background: var(--line); }
+.ccols { position: absolute; inset: 0; display: flex; justify-content: space-around; align-items: flex-end; gap: 8px; padding: 0 4px; }
+.ccol { flex: 1; max-width: 46px; height: 100%; display: flex; align-items: flex-end; }
+.cbar { position: relative; width: 100%; border-radius: 10px 10px 3px 3px; background: linear-gradient(180deg, var(--ring-a), var(--ring-b)); box-shadow: 0 6px 14px rgba(15,70,50,.12); }
+.ctip { position: absolute; left: 50%; bottom: 100%; transform: translate(-50%, -3px); font-size: 10.5px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.clabels { display: flex; justify-content: space-around; gap: 4px; padding: 8px 4px 0; }
+.clabels > div { flex: 1; max-width: 64px; display: grid; justify-items: center; gap: 4px; min-width: 0; }
+.cic { width: 34px; height: 34px; border-radius: 17px; display: grid; place-items: center; background: var(--tile); font-size: 12px; font-weight: 700; }
+.cname { font-size: 11.5px; color: var(--ink); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+
+/* ---- Home: hero + wallet ---- */
+.hero { position: relative; overflow: hidden; }
+.hero .wallet { position: absolute; right: -14px; top: 50%; width: 118px; height: auto; transform: translateY(-50%); pointer-events: none; display: none; }
+.hero .trend:empty { display: none; }
+
+/* Emerald: green header band, wallet card, dark tab bar */
+:root[data-theme="emerald"] .homehead { margin: -14px -16px 0; padding: 14px 16px 18px; background: linear-gradient(180deg, #0B4F37 0%, #0F5C41 100%); border-radius: 0 0 30px 30px; display: grid; gap: 14px; color: #fff; }
+:root[data-theme="emerald"] .homehead .hellotext .sub, :root[data-theme="emerald"] .homehead .sync { color: #BFE3D1; }
+:root[data-theme="emerald"] .homehead .hellotext b { color: #fff; }
+:root[data-theme="emerald"] .homehead .roundbtn { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.22); color: #fff; }
+:root[data-theme="emerald"] .homehead .avatarbtn { border-color: rgba(255,255,255,.5); }
+:root[data-theme="emerald"] .hero { background: linear-gradient(120deg, #11663F 0%, #1A7A4E 60%, #237F4C 100%); border: 1px solid rgba(160,230,180,.35); box-shadow: 0 14px 30px rgba(0,40,25,.35); padding-right: 104px; min-height: 150px; }
+:root[data-theme="emerald"] .hero .bignum { font-size: clamp(30px, 9vw, 40px); white-space: nowrap; }
+:root[data-theme="emerald"] .hero .rowb { justify-content: flex-start; gap: 8px; flex-wrap: wrap; }
+:root[data-theme="emerald"] .hero::before { display: none; }
+:root[data-theme="emerald"] .hero .wallet { display: block; }
+:root[data-theme="emerald"] .hero .trend { color: #9FE69A; font-weight: 600; }
+:root[data-theme="emerald"] .hero .trend .bad, :root[data-theme="emerald"] .hero .trend .good { color: inherit; }
+:root[data-theme="emerald"] .tabbar { background: linear-gradient(180deg, #0F5C41, #0A4430); border-top: 0; border-radius: 26px 26px 0 0; }
+:root[data-theme="emerald"] .tabbar button { color: #CFE7DA; }
+:root[data-theme="emerald"] .tabbar button[aria-current="page"] { color: #A6E86B; }
+:root[data-theme="emerald"] .tabbar .fab { background: linear-gradient(180deg, #4CC76B, #1E9A4E); color: #fff; box-shadow: 0 10px 24px rgba(30,154,78,.45); border: 4px solid #F3F7F5; width: 62px; height: 62px; margin-top: -30px; }
+#keptPill { display: none; }
+.clabels { padding: 8px 0 0; gap: 2px; }
+.clabels > div { max-width: none; }
+.cname { font-size: 10.5px; letter-spacing: -0.2px; text-overflow: clip; }

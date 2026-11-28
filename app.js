@@ -2082,4 +2082,18 @@
     let reloaded = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => { if (reloaded) return; reloaded = true; if (!document.querySelector(".overlay.open")) location.reload(); });
   }
+  // Installed apps stay open in the background, so check for a newer version each time the app comes back to the front.
+  const myVersion = ((document.querySelector('link[href*="style.css"]') || {}).href || "").split("v=")[1] || "";
+  let lastCheck = 0;
+  async function checkForUpdate() {
+    if (Date.now() - lastCheck < 60000 || !navigator.onLine) return;
+    lastCheck = Date.now();
+    try {
+      const html = await fetch("index.html?check=" + Date.now(), { cache: "no-store" }).then(r => r.ok ? r.text() : "");
+      const live = (html.match(/style\.css\?v=(\d+)/) || [])[1];
+      if (live && myVersion && Number(live) > Number(myVersion) && !document.querySelector(".overlay.open")) location.reload();
+    } catch (_) {}
+  }
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForUpdate(); });
+  setTimeout(checkForUpdate, 4000);
 })();

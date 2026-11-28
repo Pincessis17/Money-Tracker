@@ -480,7 +480,7 @@
   const passProblem = (a, b) => a.length < 8 ? "Use at least 8 characters. A few random words works well." : a !== b ? "The two passphrases don't match." : "";
   $("vSetup").addEventListener("submit", async e => {
     e.preventDefault();
-    const a = $("vNew1").value, b = $("vNew2").value, p = passProblem(a, b);
+    const a = $("vNew1").value, p = passProblem(a, a);
     if (p) { $("vErr").textContent = p; return; }
     $("vSetupBtn").disabled = true; $("vSetupBtn").textContent = "Setting up…";
     try {
@@ -488,12 +488,11 @@
       const { error } = await sb.from("vault").insert({ pass: v.pass, rec: v.rec });
       if (error) throw error;
       st.vault = { pass: v.pass, rec: v.rec };
-      st.pendingKey = v.key;
-      $("vCodeText").textContent = v.code;
-      $("vSaved").checked = false; $("vCodeDone").disabled = true;
-      vaultMode("vCode");
+      // Straight in: the recovery code waits on Home instead of blocking here.
+      st.newRcode = v.code;
+      vaultReady(v.key);
     } catch (err) { $("vErr").textContent = "Couldn't set up your vault. Check your connection and try again."; }
-    finally { $("vSetupBtn").disabled = false; $("vSetupBtn").textContent = "Lock my data"; }
+    finally { $("vSetupBtn").disabled = false; $("vSetupBtn").textContent = "Continue"; }
   });
   $("vCopy").addEventListener("click", async () => { try { await navigator.clipboard.writeText($("vCodeText").textContent); toast("Recovery code copied"); } catch (_) { toast("Copy was blocked. Write it down instead."); } });
   $("vSaved").addEventListener("change", () => { $("vCodeDone").disabled = !$("vSaved").checked; });

@@ -804,7 +804,9 @@
   const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent), standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
   (() => { const sel = $("rTime"); for (let h = 6; h <= 23; h++) for (const m of ["00", "30"]) { const v = String(h).padStart(2, "0") + ":" + m; sel.add(new Option(v, v)); } sel.value = "20:00"; })();
   function b64u(s) { const p = "=".repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(b, c => c.charCodeAt(0)); }
-  async function mySub() { try { const r = await navigator.serviceWorker.ready; return await r.pushManager.getSubscription(); } catch (_) { return null; } }
+  // The app's background worker; gives up after a few seconds instead of waiting forever (e.g. private browsing).
+  const swReady = () => Promise.race([navigator.serviceWorker.ready, new Promise((_, rej) => setTimeout(() => rej(new Error("no service worker")), 4000))]);
+  async function mySub() { try { const r = await swReady(); return await r.pushManager.getSubscription(); } catch (_) { return null; } }
   async function renderReminder() {
     const on = $("rOn"), note = $("rNote");
     if (!pushOK()) {
@@ -835,7 +837,7 @@
         if (perm !== "granted") { on.checked = false; return renderReminder(); }
         const { data, error } = await sb.functions.invoke("push", { method: "GET" });
         if (error || !data || !data.publicKey) throw error || new Error("no key");
-        const reg = await navigator.serviceWorker.ready;
+        const reg = await swReady();
         const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(data.publicKey) });
         await saveReminder(sub);
         toast(T("Reminder on. See you at") + " " + $("rTime").value);
@@ -2470,7 +2472,7 @@
   $("setDone").addEventListener("click", closeSettings);
   $("sHome").addEventListener("change", () => $("sHomeNote").classList.toggle("hidden", $("sHome").value === home()));
   $("signOut").addEventListener("click", async () => { $("setOv").classList.remove("open");
-    try { const sub = await mySub(); if (sub) { await sb.from("push_subs").delete().eq("endpoint", sub.endpoint); await sub.unsubscribe(); } } catch (_) {} await Vault.forget(); await sb.auth.signOut(); });
+    try { const sub = navigator.serviceWorker && navigator.serviceWorker.controller ? await mySub() : null; if (sub) { await sb.from("push_subs").delete().eq("endpoint", sub.endpoint); await sub.unsubscribe(); } } catch (_) {} await Vault.forget(); await sb.auth.signOut(); });
   /* ---------- PDF statement (made on the phone, in the theme's colours) ---------- */
   const T = s => I18N.t(s);
   function loadScript(src) {

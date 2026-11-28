@@ -1,6 +1,6 @@
 // Keeps the app shell available offline; always tries the network first so updates arrive.
-const CACHE = "my-money-v55";
-const SHELL = ["./", "index.html", "style.css?v=55", "app.js?v=55", "i18n.js?v=55", "config.js?v=55", "vault.js?v=55", "supabase.js", "manifest.webmanifest", "icons/icon-192.png", "vendor/great-vibes.woff2"];
+const CACHE = "my-money-v56";
+const SHELL = ["./", "index.html", "style.css?v=56", "app.js?v=56", "i18n.js?v=56", "config.js?v=56", "vault.js?v=56", "supabase.js", "manifest.webmanifest", "icons/icon-192.png", "vendor/great-vibes.woff2"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener("fetch", e => {
